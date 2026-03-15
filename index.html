@@ -128,8 +128,14 @@
             gap: 6px;
             transition: background 0.2s, transform 0.1s;
         }
-        .btn-download:hover { background: #4f46e5; }
-        .btn-download:active { transform: scale(0.97); }
+
+        .btn-download:hover {
+            background: #4f46e5;
+        }
+
+        .btn-download:active {
+            transform: scale(0.97);
+        }
 
         /* ── 欄位表格 ── */
         .info-table {
@@ -387,50 +393,101 @@
         }
 
         /* ── 月曆視圖 ── */
-        .calendar-wrapper { margin-bottom: 20px; }
+        .calendar-wrapper {
+            margin-bottom: 20px;
+        }
+
         .calendar-month-title {
-            font-size: 1.15rem; font-weight: 700; color: var(--navy);
-            margin: 0 0 12px; padding-bottom: 6px; border-bottom: 2px solid var(--border);
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--navy);
+            margin: 0 0 12px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid var(--border);
         }
+
         .calendar-grid {
-            display: grid; grid-template-columns: repeat(7, 1fr);
-            gap: 1px; background: var(--border);
-            border: 1px solid var(--border); border-radius: 8px;
-            overflow: hidden; margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 30px;
         }
+
         .calendar-header-day {
-            background: #f8fafc; padding: 10px 4px;
-            text-align: center; font-weight: 600; font-size: 0.85rem; color: var(--slate);
+            background: #f8fafc;
+            padding: 10px 4px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--slate);
         }
+
         .calendar-cell {
-            background: var(--surface); min-height: 120px;
-            padding: 6px; display: flex; flex-direction: column; gap: 4px;
+            background: var(--surface);
+            min-height: 120px;
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
-        .calendar-cell.empty { background: #fafafa; }
+
+        .calendar-cell.empty {
+            background: #fafafa;
+        }
+
         .calendar-date-num {
-            font-size: 0.85rem; font-weight: 600; color: var(--slate);
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--slate);
             margin-bottom: 4px;
         }
+
         .calendar-event {
-            font-size: 0.75rem; padding: 4px 6px; border-radius: 4px;
+            font-size: 0.75rem;
+            padding: 4px 6px;
+            border-radius: 4px;
             border: 1px solid transparent;
-            background: var(--primary-light); color: var(--primary);
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-            line-height: 1.3; font-weight: 600; text-align: center; cursor: pointer;
+            background: var(--primary-light);
+            color: var(--primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.3;
+            font-weight: 600;
+            text-align: center;
+            cursor: pointer;
         }
+
         .calendar-event.conflict {
-            background: var(--danger-bg); color: var(--danger);
+            background: var(--danger-bg);
+            color: var(--danger);
             border: 1px solid var(--danger-border);
         }
-        
+
         /* ── 月曆篩選器 ── */
         .filter-btn {
-            padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600;
-            cursor: pointer; border: 1px solid var(--border); background: #f8fafc; color: var(--slate);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: #f8fafc;
+            color: var(--slate);
             transition: all 0.2s;
         }
-        .filter-btn:hover { filter: brightness(0.95); }
-        .filter-btn.active { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--navy); }
+
+        .filter-btn:hover {
+            filter: brightness(0.95);
+        }
+
+        .filter-btn.active {
+            box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--navy);
+        }
     </style>
 </head>
 
@@ -446,7 +503,12 @@
                 <span class="upload-icon">📂</span>
                 <input type="file" id="fileInput" accept=".xlsx,.xls" />
             </div>
-
+            <ul class="rules-list">
+                <li>📋 讀取 <strong>第一張工作表</strong>，資料從第 2 列開始（第 1 列為標題）</li>
+                <li>🔀 資料列<strong>不需依時間排序</strong>，程式會自動比對所有行程</li>
+                <li>⛔ 頭尾相接（如 10:00 結束、10:00 開始）<strong>不算衝突</strong></li>
+            </ul>
+            <br>
             <table class="info-table">
                 <thead>
                     <tr>
@@ -489,11 +551,7 @@
                 </tbody>
             </table>
 
-            <ul class="rules-list">
-                <li>📋 讀取 <strong>第一張工作表</strong>，資料從第 2 列開始（第 1 列為標題）</li>
-                <li>🔀 資料列<strong>不需依時間排序</strong>，程式會自動比對所有行程</li>
-                <li>⛔ 頭尾相接（如 10:00 結束、10:00 開始）<strong>不算衝突</strong></li>
-            </ul>
+
         </div>
     </div>
 
@@ -502,8 +560,14 @@
         <div class="card-body">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h3 style="margin: 0; font-size: 1.15rem; color: var(--navy);">📊 日期檢視（甘特圖）</h3>
-                <button class="btn-download" data-html2canvas-ignore="true" onclick="downloadPDF('ganttResult', '排班_日期檢視.pdf')">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <button class="btn-download" data-html2canvas-ignore="true"
+                    onclick="downloadPDF('ganttResult', '排班_日期檢視.pdf')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
                     下載 PDF
                 </button>
             </div>
@@ -516,14 +580,21 @@
         <div class="card-body">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h3 style="margin: 0; font-size: 1.15rem; color: var(--navy);">📅 月曆視圖報告</h3>
-                <button class="btn-download" data-html2canvas-ignore="true" onclick="downloadPDF('calendarResult', '排班_月曆視圖.pdf')">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <button class="btn-download" data-html2canvas-ignore="true"
+                    onclick="downloadPDF('calendarResult', '排班_月曆視圖.pdf')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
                     下載 PDF
                 </button>
             </div>
-            
-            <div id="calendarFilter" style="margin-bottom: 20px; display: flex; gap: 8px; flex-wrap: wrap;" data-html2canvas-ignore="true"></div>
-            
+
+            <div id="calendarFilter" style="margin-bottom: 20px; display: flex; gap: 8px; flex-wrap: wrap;"
+                data-html2canvas-ignore="true"></div>
+
             <div id="calendarResult" class="calendar-wrapper" style="margin-bottom: 0;"></div>
         </div>
     </div>
@@ -558,7 +629,7 @@
                 document.querySelectorAll('#calendarFilter .filter-btn').forEach(b => b.classList.remove('active'));
                 btnElement.classList.add('active');
             }
-            
+
             const events = document.querySelectorAll('.calendar-event');
             events.forEach(el => {
                 if (personName === 'all' || el.getAttribute('data-person') === personName) {
@@ -711,7 +782,7 @@
                     if (!monthsMap[ym]) monthsMap[ym] = true;
                 });
                 const sortedMonths = Object.keys(monthsMap).sort();
-                
+
                 let calHtml = "";
                 sortedMonths.forEach(ym => {
                     const [year, month] = ym.split("-").map(Number);
@@ -719,23 +790,23 @@
                     calHtml += `<div class="calendar-grid">`;
                     const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
                     dayNames.forEach(d => { calHtml += `<div class="calendar-header-day">${d}</div>`; });
-                    
+
                     const firstDay = new Date(year, month - 1, 1).getDay();
                     const daysInMonth = new Date(year, month, 0).getDate();
-                    
-                    for(let i = 0; i < firstDay; i++) {
+
+                    for (let i = 0; i < firstDay; i++) {
                         calHtml += `<div class="calendar-cell empty"></div>`;
                     }
-                    for(let d = 1; d <= daysInMonth; d++) {
-                        const currentStr = `${year}-${month.toString().padStart(2,'0')}-${d.toString().padStart(2,'0')}`;
+                    for (let d = 1; d <= daysInMonth; d++) {
+                        const currentStr = `${year}-${month.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
                         calHtml += `<div class="calendar-cell">`;
                         calHtml += `<div class="calendar-date-num">${d}</div>`;
                         if (allDateEvents[currentStr]) {
-                            const dailyEvents = allDateEvents[currentStr].sort((a,b) => a.start - b.start);
+                            const dailyEvents = allDateEvents[currentStr].sort((a, b) => a.start - b.start);
                             dailyEvents.forEach(e => {
                                 const conflictClass = e.hasConflict ? " conflict" : "";
                                 const timeStr = `${formatTime(e.start)}-${formatTime(e.end)}`;
-                                
+
                                 // 非衝突事件加上專屬顏色
                                 let customStyle = "";
                                 if (!e.hasConflict) {
@@ -752,7 +823,7 @@
                         calHtml += `</div>`;
                     }
                     const lastDay = new Date(year, month - 1, daysInMonth).getDay();
-                    for(let i = lastDay + 1; i < 7; i++) {
+                    for (let i = lastDay + 1; i < 7; i++) {
                         calHtml += `<div class="calendar-cell empty"></div>`;
                     }
                     calHtml += `</div>`;
@@ -850,7 +921,7 @@
 
         function downloadPDF(elementId, filename) {
             const element = document.getElementById(elementId);
-            
+
             // 取得圖表實際內容的大小
             const width = Math.max(element.scrollWidth, 800);
             const height = element.scrollHeight;
@@ -860,13 +931,13 @@
             const pdfHeight = height + 40;
 
             const opt = {
-                margin:       20,
-                filename:     filename || '排班報告.pdf',
-                image:        { type: 'jpeg', quality: 0.98 },
+                margin: 20,
+                filename: filename || '排班報告.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
                 // 加入 scrollY: 0 防止網頁捲動造成的上方空白
-                html2canvas:  { scale: 2, useCORS: true, scrollY: 0 },
+                html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
                 // 把 A4 尺寸改為「根據元素大小自訂尺寸」的連續單一頁面
-                jsPDF:        { unit: 'px', format: [pdfWidth, pdfHeight], orientation: 'portrait' }
+                jsPDF: { unit: 'px', format: [pdfWidth, pdfHeight], orientation: 'portrait' }
             };
             html2pdf().set(opt).from(element).save();
         }
