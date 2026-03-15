@@ -559,7 +559,7 @@
     <div id="ganttCard" class="card" style="display: none;">
         <div class="card-body">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0; font-size: 1.15rem; color: var(--navy);">📊 日期檢視（甘特圖）</h3>
+                <h3 style="margin: 0; font-size: 1.15rem; color: var(--navy);">📊 日期檢視 </h3>
                 <button class="btn-download" data-html2canvas-ignore="true"
                     onclick="downloadPDF('ganttResult', '排班_日期檢視.pdf')">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -623,16 +623,47 @@
             return isDark ? `hsl(${hue}, 75%, 35%)` : `hsl(${hue}, 80%, 92%)`;
         }
 
-        // 月曆人員過濾互動
+        // 月曆人員過濾互動 (支援多選)
+        let selectedPeople = new Set(['all']); // 預設為全選
+
         function filterCalendar(personName, btnElement) {
-            if (btnElement) {
+            const allBtn = document.querySelector('#calendarFilter .filter-btn[data-person="all"]');
+
+            if (personName === 'all') {
+                // 如果點擊「顯示全部」，清除其他所有選擇
+                selectedPeople.clear();
+                selectedPeople.add('all');
                 document.querySelectorAll('#calendarFilter .filter-btn').forEach(b => b.classList.remove('active'));
-                btnElement.classList.add('active');
+                if (btnElement) btnElement.classList.add('active');
+            } else {
+                // 如果點選特定人員
+                if (selectedPeople.has('all')) {
+                    // 如果原本是「顯示全部」，則先清空，並移除 all 的 active 狀態
+                    selectedPeople.clear();
+                    if (allBtn) allBtn.classList.remove('active');
+                }
+
+                if (selectedPeople.has(personName)) {
+                    // 已經選擇了，就取消選擇
+                    selectedPeople.delete(personName);
+                    if (btnElement) btnElement.classList.remove('active');
+                } else {
+                    // 尚未選擇，加入選擇
+                    selectedPeople.add(personName);
+                    if (btnElement) btnElement.classList.add('active');
+                }
+
+                // 如果全部取消了，預設回到「顯示全部」
+                if (selectedPeople.size === 0) {
+                    selectedPeople.add('all');
+                    if (allBtn) allBtn.classList.add('active');
+                }
             }
 
             const events = document.querySelectorAll('.calendar-event');
             events.forEach(el => {
-                if (personName === 'all' || el.getAttribute('data-person') === personName) {
+                const eventPerson = el.getAttribute('data-person');
+                if (selectedPeople.has('all') || selectedPeople.has(eventPerson)) {
                     el.style.display = 'block';
                 } else {
                     el.style.display = 'none';
@@ -769,11 +800,13 @@
                 }
 
                 // 生產 Filter 互動篩選按鈕
-                filterDiv.innerHTML = `<button class="filter-btn active" onclick="filterCalendar('all', this)">顯示全部</button>`;
+                // 每次重新渲染時，重設選擇狀態
+                selectedPeople = new Set(['all']);
+                filterDiv.innerHTML = `<button class="filter-btn active" data-person="all" onclick="filterCalendar('all', this)">顯示全部</button>`;
                 Array.from(uniquePeople).sort().forEach(person => {
                     const bg = getStringColor(person);
                     const color = getStringColor(person, true);
-                    filterDiv.innerHTML += `<button class="filter-btn" style="background:${bg}; color:${color}; border-color:${color}33;" onclick="filterCalendar('${person}', this)">${person}</button>`;
+                    filterDiv.innerHTML += `<button class="filter-btn" data-person="${person}" style="background:${bg}; color:${color}; border-color:${color}33;" onclick="filterCalendar('${person}', this)">${person}</button>`;
                 });
 
                 const monthsMap = {};
