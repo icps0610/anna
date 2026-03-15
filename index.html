@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>排班視覺化檢查工具</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<style>
+    :root { --primary: #4f46e5; --danger: #ef4444; --bg: #f8fafc; }
+    body{ font-family: -apple-system, "Microsoft JhengHei", sans-serif; background: var(--bg); padding: 20px; color: #1e293b; }
+    .container{ background: white; padding: 30px; border-radius: 12px; max-width: 1000px; margin: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    h2{ margin-top: 0; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; }
+    .upload-section { border: 2px dashed #cbd5e1; padding: 30px; text-align: center; border-radius: 8px; margin: 20px 0; background: #fff; transition: 0.3s; }
+    .upload-section:hover { border-color: var(--primary); background: #f5f3ff; }
+    
+    /* 衝突警示樣式 */
+    .conflict-card { background: #fff1f2; border: 1px solid #fecdd3; padding: 15px; margin-top: 10px; border-radius: 8px; border-left: 6px solid var(--danger); }
+    .conflict-card b { color: #9f1239; font-size: 1.1em; }
+    .success-msg { background: #dcfce7; color: #166534; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; }
+
+    /* 甘特圖樣式 */
+    .timeline-container { margin-top: 40px; overflow-x: auto; }
+    .person-row { margin-bottom: 25px; }
+    .person-name { font-weight: bold; margin-bottom: 8px; color: #475569; display: flex; justify-content: space-between; }
+    .gantt-track { position: relative; height: 45px; background: #e2e8f0; border-radius: 6px; margin-bottom: 10px; border: 1px solid #cbd5e1; }
+    .time-label { position: absolute; font-size: 10px; color: #94a3b8; top: -18px; transform: translateX(-50%); }
+    
+    .job-block {
+        position: absolute; height: 80%; top: 10%;
+        background: var(--primary); color: white; border-radius: 4px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 11px; overflow: hidden; white-space: nowrap;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 10;
+    }
+    .job-block.has-conflict {
+        background: var(--danger) !important;
+        outline: 3px solid #fca5a5;
+        z-index: 20;
+        animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+
+    /* 日期分組樣式 */
+    .date-group-header {
+        margin-top: 30px;
+        padding: 8px 14px;
+        background: #1e293b;
+        color: #f8fafc;
+        font-weight: bold;
+        font-size: 1em;
+        border-radius: 8px 8px 0 0;
+        letter-spacing: 0.03em;
+    }
+    .date-group {
+        border: 1px solid #cbd5e1;
+        border-top: none;
+        border-radius: 0 0 8px 8px;
+        padding: 16px 14px 8px;
+        background: #f8fafc;
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🗓️ 排班衝突檢查與視覺化</h2>
+    <div class="upload-section">
+        <input type="file" id="fileInput" accept=".xlsx,.xls" />
+        <p style="color: #64748b; font-size: 0.9em; margin-top: 10px;">
+            提示：同地區(D欄)接續行程不計為衝突。
+        </p>
+    </div>
+
+    <div id="textResult"></div>
+    <div id="ganttResult" class="timeline-container"></div>
+</div>
+
+<script>
+document.getElementById("fileInput").addEventListener("change", handleFile);
+
+const START_HOUR = 8; // 圖表開始時間
+const END_HOUR = 22;  // 圖表結束時間
+const TOTAL_MINS = (END_HOUR - START_HOUR) * 60;
+
+function formatExcelDate(val) {
+    if (typeof val === 'number') {
+        const date = new Date(Math.round((val - 25569) * 86400 * 1000));
+        return `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,"0")}-${date.getDate().toString().padStart(2,"0")}`;
+    }
+    return val || "未知日期";
+}
+
+function parseTime(t) {
+    if (!t) return 0;
+    if (!isNaN(t)) return Math.round(t * 24 * 60);
+    let p = t.toString().split(":");
+    return p.length < 2 ? 0 : parseInt(p[0]) * 60 + parseInt(p[1]);
+}
+
+function formatTime(m) {
+    return `${Math.floor(m/60).toString().padStart(2,"0")}:${(m%60).toString().padStart(2,"0")}`;
+}
+
+function parseNames(str) {
+    if (!str) return [];
+    return str.toString().replace(/[、，\/]/g, ",").split(",").map(s => s.trim()).filter(Boolean);
+}
+
+function handleFile(e) {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+        processData(rows);
+    };
+    reader.readAsArrayBuffer(e.target.files[0]);
+}
+
+function processData(rows) {
+    let allEvents = {}; // 按人分組
+    let conflicts = {}; 
+    let found = false;
+
+    // 1. 整理所有行程
+    for (let i = 1; i < rows.length; i++) {
+        let r = rows[i];
+        if (!r || !r[10]) continue;
+        
+        let date = formatExcelDate(r[10]);
+        let start = parseTime(r[11]);
+        let dur = parseInt(r[12]);
+        let end = start + dur;
+        let area = (r[3] || "").toString().trim();
+        let client = (r[2] || "未知客戶");
+        let names = parseNames(r[15]);
+
+        names.forEach(name => {
+            if (!allEvents[name]) allEvents[name] = {};
+            if (!allEvents[name][date]) allEvents[name][date] = [];
+            allEvents[name][date].push({ start, end, area, client, id: i, hasConflict: false });
+        });
+    }
+
+    // 2. 判定衝突 (同地區接續不衝突)
+    for (let name in allEvents) {
+        for (let date in allEvents[name]) {
+            let dayEvents = allEvents[name][date];
+            for (let i = 0; i < dayEvents.length; i++) {
+                for (let j = i + 1; j < dayEvents.length; j++) {
+                    let e1 = dayEvents[i], e2 = dayEvents[j];
+                    let isOverlap = false;
+
+                    // 僅當時間真正重疊（嚴格 overlap）才算衝突
+                    // 邊界相接（e1.end === e2.start）不算衝突
+                    if (e1.start < e2.end && e1.end > e2.start) {
+                        isOverlap = true;
+                    }
+
+                    if (isOverlap) {
+                        e1.hasConflict = e2.hasConflict = true;
+                        found = true;
+                        if (!conflicts[name]) conflicts[name] = [];
+                        let msg = `${date} | ${formatTime(e1.start)}-${formatTime(e1.end)} (第 ${e1.id + 1} 列) 與 ${formatTime(e2.start)}-${formatTime(e2.end)} (第 ${e2.id + 1} 列)`;
+                        if (!conflicts[name].includes(msg)) conflicts[name].push(msg);
+                    }
+                }
+            }
+        }
+    }
+
+    render(conflicts, allEvents, found);
+}
+
+function render(conflicts, allEvents, found) {
+    // 文字結果
+    const textDiv = document.getElementById("textResult");
+    textDiv.innerHTML = found ? "" : '<div class="success-msg">🎉 檢查完成，未發現異常衝突</div>';
+    for (let name in conflicts) {
+        let box = document.createElement("div");
+        box.className = "conflict-card";
+        box.innerHTML = `<b>⚠️ ${name} 行程衝突</b>` + conflicts[name].map(m => `<div>${m}</div>`).join("");
+        textDiv.appendChild(box);
+    }
+
+    // 甘特圖結果：以日期為主軸，顯示有衝突的日期與人員
+    const ganttDiv = document.getElementById("ganttResult");
+
+    if (!found) {
+        ganttDiv.innerHTML = "";
+        return;
+    }
+
+    // 建立以日期為 key 的 Map：date → [ { name, events[] } ]
+    const dateMap = {};
+    for (let name in allEvents) {
+        if (!conflicts[name]) continue;
+        for (let date in allEvents[name]) {
+            const hasConflictOnDay = allEvents[name][date].some(e => e.hasConflict);
+            if (!hasConflictOnDay) continue;
+            if (!dateMap[date]) dateMap[date] = [];
+            dateMap[date].push({ name, events: allEvents[name][date] });
+        }
+    }
+
+    ganttDiv.innerHTML = "<h3>📊 衝突行程視覺化（以日期分組）</h3>";
+
+    const sortedDates = Object.keys(dateMap).sort();
+    for (let date of sortedDates) {
+        const dateHeader = document.createElement("div");
+        dateHeader.className = "date-group-header";
+        dateHeader.innerHTML = `📅 ${date}　<span style="font-size:0.85em;color:#9f1239;">(${dateMap[date].length} 人衝突)</span>`;
+        ganttDiv.appendChild(dateHeader);
+
+        const dateBlock = document.createElement("div");
+        dateBlock.className = "date-group";
+
+        for (let { name, events } of dateMap[date]) {
+            let row = document.createElement("div");
+            row.className = "person-row";
+
+            let info = document.createElement("div");
+            info.className = "person-name";
+            info.innerHTML = `<span>👤 ${name}</span>`;
+            row.appendChild(info);
+
+            let track = document.createElement("div");
+            track.className = "gantt-track";
+
+            for (let h = START_HOUR; h <= END_HOUR; h++) {
+                let left = ((h - START_HOUR) * 60 / TOTAL_MINS) * 100;
+                let label = document.createElement("div");
+                label.className = "time-label";
+                label.style.left = left + "%";
+                label.innerText = h + ":00";
+                track.appendChild(label);
+            }
+
+            events.forEach(e => {
+                let block = document.createElement("div");
+                block.className = "job-block" + (e.hasConflict ? " has-conflict" : "");
+                let left = ((e.start - START_HOUR * 60) / TOTAL_MINS) * 100;
+                let width = ((e.end - e.start) / TOTAL_MINS) * 100;
+                block.style.left = Math.max(0, left) + "%";
+                block.style.width = width + "%";
+                block.title = `第 ${e.id + 1} 列　${formatTime(e.start)}-${formatTime(e.end)}　${e.client} (${e.area})`;
+                block.innerText = e.client.substring(0, 5);
+                track.appendChild(block);
+            });
+
+            row.appendChild(track);
+            dateBlock.appendChild(row);
+        }
+
+        ganttDiv.appendChild(dateBlock);
+    }
+}
+</script>
+</body>
+</html>
