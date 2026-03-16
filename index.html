@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>排班視覺化檢查工具</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -488,6 +490,127 @@
         .filter-btn.active {
             box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--navy);
         }
+
+        /* ── 時間網格：按週換行 ── */
+        .tg-week-row {
+            display: flex;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 12px;
+            background: var(--surface);
+        }
+
+        .tg-time-axis {
+            width: 50px;
+            flex-shrink: 0;
+            border-right: 1px solid var(--border);
+            background: #f8fafc;
+            position: sticky;
+            left: 0;
+            z-index: 10;
+        }
+
+        .tg-axis-header {
+            height: 40px;
+            border-bottom: 1px solid var(--border);
+            background: var(--navy);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .tg-axis-cell {
+            border-bottom: 1px solid var(--border);
+            box-sizing: border-box;
+            display: flex;
+            justify-content: flex-end;
+            padding-top: 5px;
+            padding-right: 8px;
+            font-size: 0.75rem;
+            color: var(--slate);
+        }
+
+        .tg-days-container {
+            display: flex;
+            flex: 1;
+        }
+
+        .tg-day-col {
+            flex: 1;
+            min-width: 0;
+            border-right: 1px solid #e2e8f0;
+            position: relative;
+        }
+
+        .tg-day-col:last-child {
+            border-right: none;
+        }
+
+        .tg-day-header {
+            height: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #f8fafc;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: var(--slate);
+        }
+
+        .tg-day-header.empty-header {
+            background: #fafafa;
+            color: transparent;
+        }
+
+        .tg-hour-cell {
+            border-bottom: 1px dashed #e2e8f0;
+            box-sizing: border-box;
+            display: grid;
+            grid-template-columns: repeat(3, 36px);
+            gap: 4px;
+            padding: 4px;
+            overflow: hidden;
+            align-content: flex-start;
+            justify-content: center;
+        }
+
+        .tg-person-dot {
+            width: 36px;
+            height: 36px;
+            box-sizing: border-box;
+            flex-shrink: 0;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow:
+                0 2px 4px rgba(0, 0, 0, 0.06),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        .tg-person-dot:active {
+            transform: scale(0.95);
+        }
+
+        .tg-person-dot.is-dimmed {
+            background-color: #e2e8f0 !important;
+            color: #94a3b8 !important;
+            box-shadow: none !important;
+            border-color: transparent !important;
+            opacity: 0.35 !important;
+            transform: scale(0.9);
+        }
     </style>
 </head>
 
@@ -505,7 +628,6 @@
             </div>
             <ul class="rules-list">
                 <li>📋 讀取 <strong>第一張工作表</strong>，資料從第 2 列開始（第 1 列為標題）</li>
-                <li>🔀 資料列<strong>不需依時間排序</strong>，程式會自動比對所有行程</li>
                 <li>⛔ 頭尾相接（如 10:00 結束、10:00 開始）<strong>不算衝突</strong></li>
             </ul>
             <br>
@@ -550,8 +672,6 @@
                     </tr>
                 </tbody>
             </table>
-
-
         </div>
     </div>
 
@@ -599,6 +719,26 @@
         </div>
     </div>
 
+    <!-- 2.5 時間網格視圖 (Time Grid) -->
+    <div id="timeGridCard" class="card" style="display: none;">
+        <div class="card-body">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 style="margin: 0; font-size: 1.15rem; color: var(--navy);">🕒 月曆時間網格視圖 (不顯示衝突 和 重複名字)</h3>
+                <button class="btn-download" data-html2canvas-ignore="true"
+                    onclick="downloadPDF('timeGridResult', '排班_時間網格.pdf')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    下載 PDF
+                </button>
+            </div>
+            <div id="timeGridResult" style="margin-bottom: 0;"></div>
+        </div>
+    </div>
+
     <!-- 3. 文字結果 (Text) -->
     <div id="textCard" class="card" style="display: none;">
         <div class="card-body">
@@ -611,49 +751,63 @@
     <script>
         document.getElementById("fileInput").addEventListener("change", handleFile);
 
-        const START_HOUR = 8; // 圖表開始時間
-        const END_HOUR = 22;  // 圖表結束時間
+        const START_HOUR = 8;
+        const END_HOUR = 22;
         const TOTAL_MINS = (END_HOUR - START_HOUR) * 60;
 
-        // 幫每個人自動分配專屬背景色
         function getStringColor(str, isDark = false) {
             let hash = 0;
-            for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-            let hue = Math.abs(hash % 360);
-            return isDark ? `hsl(${hue}, 75%, 35%)` : `hsl(${hue}, 80%, 92%)`;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+                hash = hash & hash; // Convert to 32bit integer
+            }
+            // 使用黃金比例發散色相，避免顏色太接近
+            let h = Math.abs((hash * 137.5) % 360);
+            return isDark ? `hsl(${h}, 70%, 35%)` : `hsl(${h}, 85%, 90%)`;
         }
 
-        // 月曆人員過濾互動 (支援多選)
-        let selectedPeople = new Set(['all']); // 預設為全選
+        let selectedPeople = new Set(['all']);
+        let highlightedPerson = null; // 用於時間網格高亮
+
+        function toggleHighlight(personName) {
+            if (highlightedPerson === personName) {
+                highlightedPerson = null;
+            } else {
+                highlightedPerson = personName;
+            }
+
+            document.querySelectorAll('.tg-person-dot').forEach(dot => {
+                const dotPerson = dot.getAttribute('data-person');
+                if (highlightedPerson && dotPerson !== highlightedPerson) {
+                    dot.classList.add('is-dimmed');
+                } else {
+                    dot.classList.remove('is-dimmed');
+                }
+            });
+        }
 
         function filterCalendar(personName, btnElement) {
             const allBtn = document.querySelector('#calendarFilter .filter-btn[data-person="all"]');
 
             if (personName === 'all') {
-                // 如果點擊「顯示全部」，清除其他所有選擇
                 selectedPeople.clear();
                 selectedPeople.add('all');
                 document.querySelectorAll('#calendarFilter .filter-btn').forEach(b => b.classList.remove('active'));
                 if (btnElement) btnElement.classList.add('active');
             } else {
-                // 如果點選特定人員
                 if (selectedPeople.has('all')) {
-                    // 如果原本是「顯示全部」，則先清空，並移除 all 的 active 狀態
                     selectedPeople.clear();
                     if (allBtn) allBtn.classList.remove('active');
                 }
 
                 if (selectedPeople.has(personName)) {
-                    // 已經選擇了，就取消選擇
                     selectedPeople.delete(personName);
                     if (btnElement) btnElement.classList.remove('active');
                 } else {
-                    // 尚未選擇，加入選擇
                     selectedPeople.add(personName);
                     if (btnElement) btnElement.classList.add('active');
                 }
 
-                // 如果全部取消了，預設回到「顯示全部」
                 if (selectedPeople.size === 0) {
                     selectedPeople.add('all');
                     if (allBtn) allBtn.classList.add('active');
@@ -707,11 +861,10 @@
         }
 
         function processData(rows) {
-            let allEvents = {}; // 按人分組
+            let allEvents = {};
             let conflicts = {};
             let found = false;
 
-            // 1. 整理所有行程
             for (let i = 1; i < rows.length; i++) {
                 let r = rows[i];
                 if (!r || !r[10]) continue;
@@ -731,22 +884,13 @@
                 });
             }
 
-            // 2. 判定衝突 (同地區接續不衝突)
             for (let name in allEvents) {
                 for (let date in allEvents[name]) {
                     let dayEvents = allEvents[name][date];
                     for (let i = 0; i < dayEvents.length; i++) {
                         for (let j = i + 1; j < dayEvents.length; j++) {
                             let e1 = dayEvents[i], e2 = dayEvents[j];
-                            let isOverlap = false;
-
-                            // 僅當時間真正重疊（嚴格 overlap）才算衝突
-                            // 邊界相接（e1.end === e2.start）不算衝突
                             if (e1.start < e2.end && e1.end > e2.start) {
-                                isOverlap = true;
-                            }
-
-                            if (isOverlap) {
                                 e1.hasConflict = e2.hasConflict = true;
                                 found = true;
                                 if (!conflicts[name]) conflicts[name] = [];
@@ -762,7 +906,6 @@
         }
 
         function render(conflicts, allEvents, found) {
-            // 文字結果
             const textDiv = document.getElementById("textResult");
             textDiv.innerHTML = found ? "" : '<div class="success-msg">🎉 檢查完成，未發現異常衝突</div>';
             for (let name in conflicts) {
@@ -772,20 +915,18 @@
                 textDiv.appendChild(box);
             }
 
-            // 顯示/隱藏各區塊卡片
             const hasAnyEvent = Object.keys(allEvents).length > 0;
             document.getElementById("ganttCard").style.display = found ? "block" : "none";
             document.getElementById("calendarCard").style.display = hasAnyEvent ? "block" : "none";
             document.getElementById("textCard").style.display = hasAnyEvent ? "block" : "none";
 
-            // ==== 月曆結果：顯示所有行程 ====
+            // ==== 月曆結果 ====
             const calendarDiv = document.getElementById("calendarResult");
             calendarDiv.innerHTML = "";
             const filterDiv = document.getElementById("calendarFilter");
             filterDiv.innerHTML = "";
 
             if (hasAnyEvent) {
-                // 整理所有人的行程並綁上名字
                 const allDateEvents = {};
                 const uniquePeople = new Set();
 
@@ -799,8 +940,6 @@
                     }
                 }
 
-                // 生產 Filter 互動篩選按鈕
-                // 每次重新渲染時，重設選擇狀態
                 selectedPeople = new Set(['all']);
                 filterDiv.innerHTML = `<button class="filter-btn active" data-person="all" onclick="filterCalendar('all', this)">顯示全部</button>`;
                 Array.from(uniquePeople).sort().forEach(person => {
@@ -824,44 +963,208 @@
                     const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
                     dayNames.forEach(d => { calHtml += `<div class="calendar-header-day">${d}</div>`; });
 
-                    const firstDay = new Date(year, month - 1, 1).getDay();
-                    const daysInMonth = new Date(year, month, 0).getDate();
+                    const firstDate = new Date(year, month - 1, 1);
+                    const startDate = new Date(firstDate);
+                    startDate.setDate(1 - firstDate.getDay());
+                    const lastDate = new Date(year, month, 0);
+                    const endDate = new Date(lastDate);
+                    endDate.setDate(lastDate.getDate() + (6 - lastDate.getDay()));
 
-                    for (let i = 0; i < firstDay; i++) {
-                        calHtml += `<div class="calendar-cell empty"></div>`;
-                    }
-                    for (let d = 1; d <= daysInMonth; d++) {
-                        const currentStr = `${year}-${month.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
-                        calHtml += `<div class="calendar-cell">`;
-                        calHtml += `<div class="calendar-date-num">${d}</div>`;
+                    let iter = new Date(startDate);
+                    while (iter <= endDate) {
+                        const d = iter.getDate();
+                        const m = iter.getMonth() + 1;
+                        const y = iter.getFullYear();
+                        const isCurrentMonth = (m === month && y === year);
+                        const currentStr = `${y}-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
+
+                        const cellClass = isCurrentMonth ? "calendar-cell" : "calendar-cell empty";
+                        calHtml += `<div class="${cellClass}">`;
+                        const dateStyle = isCurrentMonth ? "" : "color: var(--muted); opacity: 0.6;";
+                        calHtml += `<div class="calendar-date-num" style="${dateStyle}">${d}</div>`;
                         if (allDateEvents[currentStr]) {
                             const dailyEvents = allDateEvents[currentStr].sort((a, b) => a.start - b.start);
                             dailyEvents.forEach(e => {
                                 const conflictClass = e.hasConflict ? " conflict" : "";
                                 const timeStr = `${formatTime(e.start)}-${formatTime(e.end)}`;
-
-                                // 非衝突事件加上專屬顏色
                                 let customStyle = "";
                                 if (!e.hasConflict) {
                                     const bg = getStringColor(e.person);
                                     const color = getStringColor(e.person, true);
                                     customStyle = `background-color: ${bg}; color: ${color}; border-color: ${color}40;`;
                                 }
-
+                                if (!isCurrentMonth) customStyle += " opacity: 0.5;";
                                 calHtml += `<div class="calendar-event${conflictClass}" data-person="${e.person}" style="${customStyle}" title="👤 ${e.person} | 🕒 ${timeStr} | 🏢 ${e.client}">
                                     ${e.person} #${e.id + 1}
                                 </div>`;
                             });
                         }
                         calHtml += `</div>`;
-                    }
-                    const lastDay = new Date(year, month - 1, daysInMonth).getDay();
-                    for (let i = lastDay + 1; i < 7; i++) {
-                        calHtml += `<div class="calendar-cell empty"></div>`;
+                        iter.setDate(iter.getDate() + 1);
                     }
                     calHtml += `</div>`;
                 });
                 calendarDiv.innerHTML = calHtml;
+
+                // ==== 時間網格視圖：按週換行 ====
+                const timeGridDiv = document.getElementById("timeGridResult");
+                timeGridDiv.innerHTML = "";
+                document.getElementById("timeGridCard").style.display = "block";
+
+                const TG_START_HOUR = 7;
+                const TG_END_HOUR = 24;
+                const HEIGHT_PER_HOUR = 122; // 調整高度以容納至少三排 (36*3 + gap*2 + padding)
+
+                sortedMonths.forEach(ym => {
+                    const [year, month] = ym.split("-").map(Number);
+                    // 月標題
+                    const monthTitle = document.createElement("div");
+                    monthTitle.className = "calendar-month-title";
+                    monthTitle.textContent = `${year} 年 ${month} 月`;
+                    timeGridDiv.appendChild(monthTitle);
+
+                    // 建立週資料：包含前後月份的填充
+                    const weeks = [];
+                    let currentWeek = [];
+
+                    const firstDate = new Date(year, month - 1, 1);
+                    const startDate = new Date(firstDate);
+                    startDate.setDate(1 - firstDate.getDay());
+                    const lastDate = new Date(year, month, 0);
+                    const endDate = new Date(lastDate);
+                    endDate.setDate(lastDate.getDate() + (6 - lastDate.getDay()));
+
+                    let iter = new Date(startDate);
+                    while (iter <= endDate) {
+                        const d = iter.getDate();
+                        const m = iter.getMonth() + 1;
+                        const y = iter.getFullYear();
+                        const isCurrentMonth = (m === month && y === year);
+                        const dateStr = `${y}-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
+
+                        currentWeek.push({ day: d, isCurrentMonth, dateStr });
+                        if (currentWeek.length === 7) {
+                            weeks.push(currentWeek);
+                            currentWeek = [];
+                        }
+                        iter.setDate(iter.getDate() + 1);
+                    }
+
+                    // 加入星期標題列 (標題要從禮拜日顯示)
+                    const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
+                    const weekdayHeader = document.createElement("div");
+                    weekdayHeader.style = "display: flex; margin-bottom: 8px; padding-left: 50px;";
+                    dayNames.forEach(dn => {
+                        const h = document.createElement("div");
+                        h.style = "flex: 1; text-align: center; font-weight: 700; font-size: 0.85rem; color: var(--slate); border-bottom: 2px solid var(--border); padding: 6px 0;";
+                        h.textContent = dn;
+                        weekdayHeader.appendChild(h);
+                    });
+
+                    // 渲染每週
+                    weeks.forEach(week => {
+                        const weekRow = document.createElement("div");
+                        weekRow.className = "tg-week-row";
+
+                        // Y 軸時間
+                        const timeAxis = document.createElement("div");
+                        timeAxis.className = "tg-time-axis";
+
+                        const axisHeader = document.createElement("div");
+                        axisHeader.className = "tg-axis-header";
+                        axisHeader.textContent = "時間";
+                        timeAxis.appendChild(axisHeader);
+
+                        for (let h = TG_START_HOUR; h <= TG_END_HOUR; h++) {
+                            const cell = document.createElement("div");
+                            cell.className = "tg-axis-cell";
+                            cell.style.height = HEIGHT_PER_HOUR + "px";
+                            cell.textContent = h + ":00";
+                            timeAxis.appendChild(cell);
+                        }
+                        weekRow.appendChild(timeAxis);
+
+                        // 7 天
+                        const daysContainer = document.createElement("div");
+                        daysContainer.className = "tg-days-container";
+
+                        week.forEach((dayObj, idx) => {
+                            const { day, isCurrentMonth, dateStr } = dayObj;
+                            const dayCol = document.createElement("div");
+                            dayCol.className = "tg-day-col";
+
+                            const header = document.createElement("div");
+                            header.className = "tg-day-header";
+                            if (!isCurrentMonth) {
+                                header.style.color = "var(--muted)";
+                                header.style.backgroundColor = "#f8fafc";
+                                header.style.opacity = "0.7";
+                            }
+                            header.innerHTML = `<span>${day}</span><span style="font-size:0.7rem;font-weight:400;">(${dayNames[idx]})</span>`;
+                            dayCol.appendChild(header);
+
+                            const currentStr = dateStr;
+
+                            // 整理當天行程（按小時分組）
+                            const eventsByHour = {};
+                            if (currentStr && allDateEvents[currentStr]) {
+                                allDateEvents[currentStr].sort((a, b) => a.start - b.start).forEach(e => {
+                                    const startH = Math.floor(e.start / 60);
+                                    const endH = Math.floor((e.end - 1) / 60);
+                                    for (let h = startH; h <= endH; h++) {
+                                        if (!eventsByHour[h]) eventsByHour[h] = [];
+                                        eventsByHour[h].push(e);
+                                    }
+                                });
+                            }
+
+                            // 每小時格
+                            for (let h = TG_START_HOUR; h <= TG_END_HOUR; h++) {
+                                const hourCell = document.createElement("div");
+                                hourCell.className = "tg-hour-cell";
+                                hourCell.style.height = HEIGHT_PER_HOUR + "px";
+
+                                if (eventsByHour[h]) {
+                                    const seenPersons = new Set();
+                                    eventsByHour[h].sort((a, b) => a.person.localeCompare(b.person)).forEach(e => {
+                                        if (seenPersons.has(e.person)) return;
+                                        seenPersons.add(e.person);
+
+                                        const bg = getStringColor(e.person);
+                                        const first = e.person.charAt(0).toUpperCase();
+
+                                        const dot = document.createElement("div");
+                                        dot.className = "tg-person-dot";
+                                        dot.setAttribute('data-person', e.person); // 儲存人名供高亮參考
+                                        dot.style.backgroundColor = bg;
+                                        dot.style.color = "black";
+                                        if (!isCurrentMonth) dot.style.opacity = "0.5";
+                                        dot.title = `${e.person} #${e.id + 1} | 🕒 ${formatTime(e.start)}-${formatTime(e.end)} | 🏢 ${e.client}`;
+                                        dot.textContent = first;
+
+                                        // 監聽點選事件
+                                        dot.onclick = (evt) => {
+                                            evt.stopPropagation();
+                                            toggleHighlight(e.person);
+                                        };
+
+                                        hourCell.appendChild(dot);
+                                    });
+                                }
+
+                                dayCol.appendChild(hourCell);
+                            }
+
+                            daysContainer.appendChild(dayCol);
+                        });
+
+                        weekRow.appendChild(daysContainer);
+                        timeGridDiv.appendChild(weekRow);
+                    });
+                });
+
+            } else {
+                document.getElementById("timeGridCard").style.display = "none";
             }
 
             // ==== 甘特圖結果 ====
@@ -872,7 +1175,6 @@
                 return;
             }
 
-            // 建立以日期為 key 的 Map：date → [ { name, events[] } ]
             const dateMap = {};
             for (let name in allEvents) {
                 if (!conflicts[name]) continue;
@@ -917,7 +1219,6 @@
                         track.appendChild(label);
                     }
 
-                    // 甘特色塊
                     events.forEach(e => {
                         let block = document.createElement("div");
                         block.className = "job-block" + (e.hasConflict ? " has-conflict" : "");
@@ -930,7 +1231,6 @@
                         track.appendChild(block);
                     });
 
-                    // 行程文字列（依開始時間排序，顯示於甘特列正下方）
                     const textList = document.createElement("div");
                     textList.className = "event-text-list";
 
@@ -952,27 +1252,31 @@
             }
         }
 
-        function downloadPDF(elementId, filename) {
+        async function downloadPDF(elementId, filename) {
             const element = document.getElementById(elementId);
 
-            // 取得圖表實際內容的大小
-            const width = Math.max(element.scrollWidth, 800);
-            const height = element.scrollHeight;
+            // 使用 html2canvas 手動擷取，避免 html2pdf 內部補丁導致的空白
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: "#ffffff",
+                logging: false,
+                scrollY: -window.scrollY
+            });
 
-            // 動態設定 PDF 尺寸（長與寬都加上邊距）
-            const pdfWidth = width + 40;
-            const pdfHeight = height + 40;
+            const imgData = canvas.toDataURL('image/jpeg', 1.0);
+            const width = canvas.width / 2; // 因為 scale 是 2
+            const height = canvas.height / 2;
 
-            const opt = {
-                margin: 20,
-                filename: filename || '排班報告.pdf',
-                image: { type: 'jpeg', quality: 0.98 },
-                // 加入 scrollY: 0 防止網頁捲動造成的上方空白
-                html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
-                // 把 A4 尺寸改為「根據元素大小自訂尺寸」的連續單一頁面
-                jsPDF: { unit: 'px', format: [pdfWidth, pdfHeight], orientation: 'portrait' }
-            };
-            html2pdf().set(opt).from(element).save();
+            // 建立一個跟畫布尺寸完全一致的 PDF
+            const pdf = new jspdf.jsPDF({
+                orientation: width > height ? 'l' : 'p',
+                unit: 'px',
+                format: [width, height]
+            });
+
+            pdf.addImage(imgData, 'JPEG', 0, 0, width, height);
+            pdf.save(filename || '排班報告.pdf');
         }
     </script>
 </body>
