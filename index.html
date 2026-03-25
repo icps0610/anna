@@ -9,6 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
@@ -28,7 +29,6 @@
             --success-bg: #ecfdf5;
             --radius: 10px;
         }
-
         *,
         *::before,
         *::after {
@@ -528,7 +528,7 @@
             box-sizing: border-box;
             display: flex;
             justify-content: flex-end;
-            padding-top: 5px;
+            align-items: center;
             padding-right: 8px;
             font-size: 0.75rem;
             color: var(--slate);
@@ -610,6 +610,26 @@
             border-color: transparent !important;
             opacity: 0.35 !important;
             transform: scale(0.9);
+        }
+
+        /* 個人視圖特別樣式 */
+        .is-personal .tg-hour-cell {
+            grid-template-columns: 1fr;
+            padding: 0;
+            gap: 0;
+            align-content: stretch;
+            justify-items: stretch;
+        }
+
+        .is-personal .tg-person-dot {
+            width: 100%;
+            height: 100%;
+            border-radius: 0;
+            font-size: 0.95rem;
+            justify-content: center;
+            padding-left: 0;
+            border: none;
+            box-shadow: none;
         }
     </style>
 </head>
@@ -739,6 +759,46 @@
         </div>
     </div>
 
+    <!-- 2.6 個人工作表 (Personal Time Grid) -->
+    <div id="personTimeGridCard" class="card" style="display: none;">
+        <div class="card-body">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    <h3 style="margin: 0; font-size: 1.15rem; color: var(--navy);">👤 個人月曆時間網格 (輸出工作表)</h3>
+                </div>
+                <div style="display: flex; gap: 10px;" data-html2canvas-ignore="true">
+                    <button class="btn-download" id="downloadPersonGridBtn"
+                        onclick="downloadPDF('personTimeGridResult', '個人工作表.pdf')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        下載個人 PDF
+                    </button>
+                    <button class="btn-download" onclick="downloadAllPeoplePDF()" style="background: var(--success);">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        下載全部人 PDF
+                    </button>
+                </div>
+            </div>
+            <div id="personGridFilter" style="margin-bottom: 20px; display: flex; gap: 8px; flex-wrap: wrap;"
+                data-html2canvas-ignore="true"></div>
+            <div id="personTimeGridResult" style="margin-bottom: 0;"></div>
+        </div>
+    </div>
+
     <!-- 3. 文字結果 (Text) -->
     <div id="textCard" class="card" style="display: none;">
         <div class="card-body">
@@ -768,6 +828,10 @@
 
         let selectedPeople = new Set(['all']);
         let highlightedPerson = null; // 用於時間網格高亮
+        let currentPersonForGrid = null; // 用於個人工作表篩選
+        let cachedAllEvents = {};
+        let cachedSortedMonths = [];
+        let cachedAllDateEvents = {};
 
         function toggleHighlight(personName) {
             if (highlightedPerson === personName) {
@@ -825,6 +889,17 @@
             });
         }
 
+        function switchPersonGrid(personName, btnElement) {
+            currentPersonForGrid = personName;
+            document.querySelectorAll('#personGridFilter .filter-btn').forEach(b => b.classList.remove('active'));
+            if (btnElement) btnElement.classList.add('active');
+
+            renderPersonTimeGrid();
+
+            // 更新下載按鍵的檔名
+            const downloadBtn = document.getElementById('downloadPersonGridBtn');
+            downloadBtn.onclick = () => downloadPDF('personTimeGridResult', `排班_個人工作表_${personName}.pdf`);
+        }
         function formatExcelDate(val) {
             if (typeof val === 'number') {
                 const date = new Date(Math.round((val - 25569) * 86400 * 1000));
@@ -942,11 +1017,31 @@
 
                 selectedPeople = new Set(['all']);
                 filterDiv.innerHTML = `<button class="filter-btn active" data-person="all" onclick="filterCalendar('all', this)">顯示全部</button>`;
-                Array.from(uniquePeople).sort().forEach(person => {
+
+                const personGridFilterDiv = document.getElementById("personGridFilter");
+                personGridFilterDiv.innerHTML = "";
+
+                Array.from(uniquePeople).sort().forEach((person, idx) => {
                     const bg = getStringColor(person);
                     const color = getStringColor(person, true);
-                    filterDiv.innerHTML += `<button class="filter-btn" data-person="${person}" style="background:${bg}; color:${color}; border-color:${color}33;" onclick="filterCalendar('${person}', this)">${person}</button>`;
+                    const btnHtml = `<button class="filter-btn" data-person="${person}" style="background:${bg}; color:${color}; border-color:${color}33;" onclick="[ACTION]('${person}', this)">${person}</button>`;
+
+                    filterDiv.innerHTML += btnHtml.replace('[ACTION]', 'filterCalendar');
+                    personGridFilterDiv.innerHTML += btnHtml.replace('[ACTION]', 'switchPersonGrid');
+
+                    if (idx === 0) {
+                        currentPersonForGrid = person;
+                    }
                 });
+
+                // 為個人篩選器加上第一個人的 active 狀態
+                if (personGridFilterDiv.firstChild) {
+                    personGridFilterDiv.firstChild.classList.add('active');
+                }
+                const downloadBtn = document.getElementById('downloadPersonGridBtn');
+                if (currentPersonForGrid) {
+                    downloadBtn.onclick = () => downloadPDF('personTimeGridResult', `排班_個人工作表_${currentPersonForGrid}.pdf`);
+                }
 
                 const monthsMap = {};
                 Object.keys(allDateEvents).forEach(dateStr => {
@@ -1006,165 +1101,23 @@
                 });
                 calendarDiv.innerHTML = calHtml;
 
+                // 快取資料供後續個人切換使用
+                cachedAllEvents = allEvents;
+                cachedSortedMonths = sortedMonths;
+                cachedAllDateEvents = allDateEvents;
+
                 // ==== 時間網格視圖：按週換行 ====
-                const timeGridDiv = document.getElementById("timeGridResult");
-                timeGridDiv.innerHTML = "";
-                document.getElementById("timeGridCard").style.display = "block";
+                renderGeneralTimeGrid();
 
-                const TG_START_HOUR = 7;
-                const TG_END_HOUR = 24;
-                const HEIGHT_PER_HOUR = 122; // 調整高度以容納至少三排 (36*3 + gap*2 + padding)
-
-                sortedMonths.forEach(ym => {
-                    const [year, month] = ym.split("-").map(Number);
-                    // 月標題
-                    const monthTitle = document.createElement("div");
-                    monthTitle.className = "calendar-month-title";
-                    monthTitle.textContent = `${year} 年 ${month} 月`;
-                    timeGridDiv.appendChild(monthTitle);
-
-                    // 建立週資料：包含前後月份的填充
-                    const weeks = [];
-                    let currentWeek = [];
-
-                    const firstDate = new Date(year, month - 1, 1);
-                    const startDate = new Date(firstDate);
-                    startDate.setDate(1 - firstDate.getDay());
-                    const lastDate = new Date(year, month, 0);
-                    const endDate = new Date(lastDate);
-                    endDate.setDate(lastDate.getDate() + (6 - lastDate.getDay()));
-
-                    let iter = new Date(startDate);
-                    while (iter <= endDate) {
-                        const d = iter.getDate();
-                        const m = iter.getMonth() + 1;
-                        const y = iter.getFullYear();
-                        const isCurrentMonth = (m === month && y === year);
-                        const dateStr = `${y}-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
-
-                        currentWeek.push({ day: d, isCurrentMonth, dateStr });
-                        if (currentWeek.length === 7) {
-                            weeks.push(currentWeek);
-                            currentWeek = [];
-                        }
-                        iter.setDate(iter.getDate() + 1);
-                    }
-
-                    // 加入星期標題列 (標題要從禮拜日顯示)
-                    const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
-                    const weekdayHeader = document.createElement("div");
-                    weekdayHeader.style = "display: flex; margin-bottom: 8px; padding-left: 50px;";
-                    dayNames.forEach(dn => {
-                        const h = document.createElement("div");
-                        h.style = "flex: 1; text-align: center; font-weight: 700; font-size: 0.85rem; color: var(--slate); border-bottom: 2px solid var(--border); padding: 6px 0;";
-                        h.textContent = dn;
-                        weekdayHeader.appendChild(h);
-                    });
-
-                    // 渲染每週
-                    weeks.forEach(week => {
-                        const weekRow = document.createElement("div");
-                        weekRow.className = "tg-week-row";
-
-                        // Y 軸時間
-                        const timeAxis = document.createElement("div");
-                        timeAxis.className = "tg-time-axis";
-
-                        const axisHeader = document.createElement("div");
-                        axisHeader.className = "tg-axis-header";
-                        axisHeader.textContent = "時間";
-                        timeAxis.appendChild(axisHeader);
-
-                        for (let h = TG_START_HOUR; h <= TG_END_HOUR; h++) {
-                            const cell = document.createElement("div");
-                            cell.className = "tg-axis-cell";
-                            cell.style.height = HEIGHT_PER_HOUR + "px";
-                            cell.textContent = h + ":00";
-                            timeAxis.appendChild(cell);
-                        }
-                        weekRow.appendChild(timeAxis);
-
-                        // 7 天
-                        const daysContainer = document.createElement("div");
-                        daysContainer.className = "tg-days-container";
-
-                        week.forEach((dayObj, idx) => {
-                            const { day, isCurrentMonth, dateStr } = dayObj;
-                            const dayCol = document.createElement("div");
-                            dayCol.className = "tg-day-col";
-
-                            const header = document.createElement("div");
-                            header.className = "tg-day-header";
-                            if (!isCurrentMonth) {
-                                header.style.color = "var(--muted)";
-                                header.style.backgroundColor = "#f8fafc";
-                                header.style.opacity = "0.7";
-                            }
-                            header.innerHTML = `<span>${day}</span><span style="font-size:0.7rem;font-weight:400;">(${dayNames[idx]})</span>`;
-                            dayCol.appendChild(header);
-
-                            const currentStr = dateStr;
-
-                            // 整理當天行程（按小時分組）
-                            const eventsByHour = {};
-                            if (currentStr && allDateEvents[currentStr]) {
-                                allDateEvents[currentStr].sort((a, b) => a.start - b.start).forEach(e => {
-                                    const startH = Math.floor(e.start / 60);
-                                    const endH = Math.floor((e.end - 1) / 60);
-                                    for (let h = startH; h <= endH; h++) {
-                                        if (!eventsByHour[h]) eventsByHour[h] = [];
-                                        eventsByHour[h].push(e);
-                                    }
-                                });
-                            }
-
-                            // 每小時格
-                            for (let h = TG_START_HOUR; h <= TG_END_HOUR; h++) {
-                                const hourCell = document.createElement("div");
-                                hourCell.className = "tg-hour-cell";
-                                hourCell.style.height = HEIGHT_PER_HOUR + "px";
-
-                                if (eventsByHour[h]) {
-                                    const seenPersons = new Set();
-                                    eventsByHour[h].sort((a, b) => a.person.localeCompare(b.person)).forEach(e => {
-                                        if (seenPersons.has(e.person)) return;
-                                        seenPersons.add(e.person);
-
-                                        const bg = getStringColor(e.person);
-                                        const first = e.person.charAt(0).toUpperCase();
-
-                                        const dot = document.createElement("div");
-                                        dot.className = "tg-person-dot";
-                                        dot.setAttribute('data-person', e.person); // 儲存人名供高亮參考
-                                        dot.style.backgroundColor = bg;
-                                        dot.style.color = "black";
-                                        if (!isCurrentMonth) dot.style.opacity = "0.5";
-                                        dot.title = `${e.person} #${e.id + 1} | 🕒 ${formatTime(e.start)}-${formatTime(e.end)} | 🏢 ${e.client}`;
-                                        dot.textContent = first;
-
-                                        // 監聽點選事件
-                                        dot.onclick = (evt) => {
-                                            evt.stopPropagation();
-                                            toggleHighlight(e.person);
-                                        };
-
-                                        hourCell.appendChild(dot);
-                                    });
-                                }
-
-                                dayCol.appendChild(hourCell);
-                            }
-
-                            daysContainer.appendChild(dayCol);
-                        });
-
-                        weekRow.appendChild(daysContainer);
-                        timeGridDiv.appendChild(weekRow);
-                    });
-                });
+                // ==== 個人工作表 ====
+                if (currentPersonForGrid) {
+                    document.getElementById("personTimeGridCard").style.display = "block";
+                    renderPersonTimeGrid();
+                }
 
             } else {
                 document.getElementById("timeGridCard").style.display = "none";
+                document.getElementById("personTimeGridCard").style.display = "none";
             }
 
             // ==== 甘特圖結果 ====
@@ -1252,10 +1205,215 @@
             }
         }
 
+        const TG_START_HOUR = 7;
+        const TG_END_HOUR = 24;
+        const HEIGHT_PER_HOUR = 122;
+
+        function renderGeneralTimeGrid() {
+            const timeGridDiv = document.getElementById("timeGridResult");
+            timeGridDiv.innerHTML = "";
+            timeGridDiv.classList.remove("is-personal");
+            document.getElementById("timeGridCard").style.display = "block";
+            renderTimeGrid(timeGridDiv, null);
+        }
+
+        function renderPersonTimeGrid() {
+            const personTimeGridDiv = document.getElementById("personTimeGridResult");
+            personTimeGridDiv.innerHTML = "";
+            personTimeGridDiv.classList.add("is-personal");
+            renderTimeGrid(personTimeGridDiv, currentPersonForGrid);
+        }
+
+        function renderTimeGrid(container, limitPerson) {
+            const sortedMonths = cachedSortedMonths;
+            const allDateEvents = cachedAllDateEvents;
+            const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
+            // 個人工作表高度折半
+            const hph = limitPerson ? 61 : 122;
+
+            sortedMonths.forEach(ym => {
+                const [year, month] = ym.split("-").map(Number);
+                const monthTitle = document.createElement("div");
+                monthTitle.className = "calendar-month-title";
+                monthTitle.textContent = `${year} 年 ${month} 月`;
+                container.appendChild(monthTitle);
+
+                const weeks = [];
+                let currentWeek = [];
+                const firstDate = new Date(year, month - 1, 1);
+                const startDate = new Date(firstDate);
+                startDate.setDate(1 - firstDate.getDay());
+                const lastDate = new Date(year, month, 0);
+                const endDate = new Date(lastDate);
+                endDate.setDate(lastDate.getDate() + (6 - lastDate.getDay()));
+
+                let iter = new Date(startDate);
+                while (iter <= endDate) {
+                    const d = iter.getDate();
+                    const m = iter.getMonth() + 1;
+                    const y = iter.getFullYear();
+                    const isCurrentMonth = (m === month && y === year);
+                    const dateStr = `${y}-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
+                    currentWeek.push({ day: d, isCurrentMonth, dateStr });
+                    if (currentWeek.length === 7) {
+                        weeks.push(currentWeek);
+                        currentWeek = [];
+                    }
+                    iter.setDate(iter.getDate() + 1);
+                }
+
+                weeks.forEach(week => {
+                    const weekRow = document.createElement("div");
+                    weekRow.className = "tg-week-row";
+
+                    const timeAxis = document.createElement("div");
+                    timeAxis.className = "tg-time-axis";
+                    const axisHeader = document.createElement("div");
+                    axisHeader.className = "tg-axis-header";
+                    axisHeader.textContent = "時間";
+                    timeAxis.appendChild(axisHeader);
+                    for (let h = TG_START_HOUR; h <= TG_END_HOUR; h++) {
+                        const cell = document.createElement("div");
+                        cell.className = "tg-axis-cell";
+                        cell.style.height = hph + "px";
+                        cell.textContent = h + ":00";
+                        timeAxis.appendChild(cell);
+                    }
+                    weekRow.appendChild(timeAxis);
+
+                    const daysContainer = document.createElement("div");
+                    daysContainer.className = "tg-days-container";
+
+                    week.forEach((dayObj, idx) => {
+                        const { day, isCurrentMonth, dateStr } = dayObj;
+                        const dayCol = document.createElement("div");
+                        dayCol.className = "tg-day-col";
+                        const header = document.createElement("div");
+                        header.className = "tg-day-header";
+                        if (!isCurrentMonth) {
+                            header.style.color = "var(--muted)";
+                            header.style.backgroundColor = "#f8fafc";
+                            header.style.opacity = "0.7";
+                        }
+                        header.innerHTML = `<span>${day}</span><span style="font-size:0.7rem;font-weight:400;">(${dayNames[idx]})</span>`;
+                        dayCol.appendChild(header);
+
+                        const eventsByHour = {};
+                        if (dateStr && allDateEvents[dateStr]) {
+                            allDateEvents[dateStr].sort((a, b) => a.start - b.start).forEach(e => {
+                                if (limitPerson && e.person !== limitPerson) return;
+                                const startH = Math.floor(e.start / 60);
+                                const endH = Math.floor((e.end - 1) / 60);
+                                for (let h = startH; h <= endH; h++) {
+                                    if (!eventsByHour[h]) eventsByHour[h] = [];
+                                    eventsByHour[h].push(e);
+                                }
+                            });
+                        }
+
+                        for (let h = TG_START_HOUR; h <= TG_END_HOUR; h++) {
+                            const hourCell = document.createElement("div");
+                            hourCell.className = "tg-hour-cell";
+                            hourCell.style.height = hph + "px";
+
+                            if (eventsByHour[h]) {
+                                const seenPersons = new Set();
+                                eventsByHour[h].sort((a, b) => a.person.localeCompare(b.person)).forEach(e => {
+                                    if (seenPersons.has(e.person)) return;
+                                    seenPersons.add(e.person);
+
+                                    const bg = getStringColor(e.person);
+                                    // 個人視圖顯示全名，普通視圖顯示字首
+                                    const displayText = limitPerson ? e.person : e.person.charAt(0).toUpperCase();
+
+                                    const dot = document.createElement("div");
+                                    dot.className = "tg-person-dot";
+                                    dot.setAttribute('data-person', e.person);
+                                    dot.style.backgroundColor = bg;
+                                    dot.style.color = "black";
+                                    if (!isCurrentMonth) dot.style.opacity = "0.5";
+                                    dot.title = `${e.person} #${e.id + 1} | 🕒 ${formatTime(e.start)}-${formatTime(e.end)} | 🏢 ${e.client}`;
+                                    dot.textContent = displayText;
+                                    dot.onclick = (evt) => {
+                                        evt.stopPropagation();
+                                        toggleHighlight(e.person);
+                                    };
+                                    hourCell.appendChild(dot);
+                                });
+                            }
+                            dayCol.appendChild(hourCell);
+                        }
+                        daysContainer.appendChild(dayCol);
+                    });
+                    weekRow.appendChild(daysContainer);
+                    container.appendChild(weekRow);
+                });
+            });
+        }
+
+
+
         async function downloadPDF(elementId, filename) {
             const element = document.getElementById(elementId);
 
-            // 使用 html2canvas 手動擷取，避免 html2pdf 內部補丁導致的空白
+            // 如果是個人工作表，執行「一週一頁」的特殊下載流程
+            if (elementId === 'personTimeGridResult') {
+                const weekRows = element.querySelectorAll('.tg-week-row');
+                if (weekRows.length === 0) return;
+
+                const pdf = new jspdf.jsPDF();
+                let firstPage = true;
+
+                for (let i = 0; i < weekRows.length; i++) {
+                    const weekRow = weekRows[i];
+
+                    // 建立臨時容器來組合該頁內容
+                    const container = document.createElement('div');
+                    container.style.padding = '30px';
+                    container.style.background = '#fff';
+                    container.style.width = element.offsetWidth + 'px';
+                    container.classList.add('is-personal'); // 繼承原本樣式
+
+                    // 尋找對應的月份標題
+                    let prev = weekRow.previousElementSibling;
+                    let monthTitle = null;
+                    while (prev) {
+                        if (!monthTitle && prev.classList.contains('calendar-month-title')) monthTitle = prev.cloneNode(true);
+                        if (monthTitle) break;
+                        prev = prev.previousElementSibling;
+                    }
+
+                    if (monthTitle) container.appendChild(monthTitle);
+                    container.appendChild(weekRow.cloneNode(true));
+
+                    // 必須暫時加入 DOM 才能擷取
+                    document.body.appendChild(container);
+                    const canvas = await html2canvas(container, {
+                        scale: 2,
+                        useCORS: true,
+                        logging: false
+                    });
+                    document.body.removeChild(container);
+
+                    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                    const w = canvas.width / 2;
+                    const h = canvas.height / 2;
+
+                    if (firstPage) {
+                        pdf.deletePage(1);
+                        pdf.addPage([w, h], w > h ? 'l' : 'p');
+                        firstPage = false;
+                    } else {
+                        pdf.addPage([w, h], w > h ? 'l' : 'p');
+                    }
+                    pdf.addImage(imgData, 'JPEG', 0, 0, w, h);
+                }
+
+                pdf.save(filename || '個人工作表.pdf');
+                return;
+            }
+
+            // 原本的單頁下載邏輯
             const canvas = await html2canvas(element, {
                 scale: 2,
                 useCORS: true,
@@ -1265,10 +1423,9 @@
             });
 
             const imgData = canvas.toDataURL('image/jpeg', 1.0);
-            const width = canvas.width / 2; // 因為 scale 是 2
+            const width = canvas.width / 2; 
             const height = canvas.height / 2;
 
-            // 建立一個跟畫布尺寸完全一致的 PDF
             const pdf = new jspdf.jsPDF({
                 orientation: width > height ? 'l' : 'p',
                 unit: 'px',
@@ -1277,6 +1434,99 @@
 
             pdf.addImage(imgData, 'JPEG', 0, 0, width, height);
             pdf.save(filename || '排班報告.pdf');
+        }
+
+        async function downloadAllPeoplePDF() {
+            const people = Object.keys(cachedAllEvents).sort();
+            if (people.length === 0) return;
+
+            // 顯示載入指示
+            const btn = document.querySelector('button[onclick="downloadAllPeoplePDF()"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = "⌛ 正在壓縮中...";
+            btn.disabled = true;
+
+            const zip = new JSZip();
+
+            // 建立背景容器
+            const offscreen = document.createElement('div');
+            offscreen.style.position = 'absolute';
+            offscreen.style.left = '-9999px';
+            offscreen.classList.add('is-personal');
+            document.body.appendChild(offscreen);
+
+            try {
+                for (const person of people) {
+                    const personPdf = new jspdf.jsPDF();
+                    let firstPageForPerson = true;
+
+                    offscreen.innerHTML = "";
+                    renderTimeGrid(offscreen, person);
+                    const weekRows = offscreen.querySelectorAll('.tg-week-row');
+                    
+                    for (let i = 0; i < weekRows.length; i++) {
+                        const weekRow = weekRows[i];
+                        const container = document.createElement('div');
+                        container.style.padding = '30px';
+                        container.style.background = '#fff';
+                        container.style.width = '1080px';
+                        container.classList.add('is-personal');
+
+                        let prev = weekRow.previousElementSibling;
+                        let monthTitle = null;
+                        while (prev) {
+                            if (!monthTitle && prev.classList.contains('calendar-month-title')) monthTitle = prev.cloneNode(true);
+                            if (monthTitle) break;
+                            prev = prev.previousElementSibling;
+                        }
+
+                        if (monthTitle) {
+                            const personTitle = document.createElement('div');
+                            personTitle.style = "font-size: 1.4rem; font-weight: 800; color: var(--primary); margin-bottom: 5px;";
+                            personTitle.textContent = `👤 ${person}`;
+                            container.appendChild(personTitle);
+                            container.appendChild(monthTitle);
+                        }
+                        container.appendChild(weekRow.cloneNode(true));
+
+                        document.body.appendChild(container);
+                        const canvas = await html2canvas(container, { scale: 2, useCORS: true, logging: false });
+                        document.body.removeChild(container);
+
+                        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                        const w = canvas.width / 2;
+                        const h = canvas.height / 2;
+
+                        if (firstPageForPerson) {
+                            personPdf.deletePage(1);
+                            personPdf.addPage([w, h], w > h ? 'l' : 'p');
+                            firstPageForPerson = false;
+                        } else {
+                            personPdf.addPage([w, h], w > h ? 'l' : 'p');
+                        }
+                        personPdf.addImage(imgData, 'JPEG', 0, 0, w, h);
+                    }
+                    
+                    // 將單人的 PDF 產出 blob 並放入 ZIP
+                    const pdfBlob = personPdf.output('blob');
+                    zip.file(`排班表_${person}.pdf`, pdfBlob);
+                }
+
+                // 生成 ZIP 並下載
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(zipBlob);
+                link.download = `全體人員分人排班表匯總_${new Date().toLocaleDateString().replace(/\//g,'-')}.zip`;
+                link.click();
+
+            } catch (err) {
+                console.error(err);
+                alert("ZIP 製作過程中發生錯誤");
+            } finally {
+                document.body.removeChild(offscreen);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
         }
     </script>
 </body>
