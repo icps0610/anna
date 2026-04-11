@@ -1,1534 +1,1779 @@
+
 <!DOCTYPE html>
+
 <html lang="zh-TW">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>排班視覺化檢查工具</title>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-        :root {
-            --bg: #f1f5f9;
-            --surface: #ffffff;
-            --navy: #0f172a;
-            --slate: #334155;
-            --muted: #94a3b8;
-            --border: #e2e8f0;
-            --primary: #6366f1;
-            --primary-light: #eef2ff;
-            --danger: #f43f5e;
-            --danger-bg: #fff1f2;
-            --danger-border: #fecdd3;
-            --success: #10b981;
-            --success-bg: #ecfdf5;
-            --radius: 10px;
-        }
-        *,
-        *::before,
-        *::after {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', 'Microsoft JhengHei', sans-serif;
-            background: var(--bg);
-            margin: 0;
-            padding: 28px 20px 60px;
-            color: var(--navy);
-            min-height: 100vh;
-        }
-
-        /* ── 頁面標題 ── */
-        .page-header {
-            max-width: 1080px;
-            margin: 0 auto 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .page-header h1 {
-            margin: 0;
-            font-size: 1.45rem;
-            font-weight: 700;
-            color: var(--navy);
-            letter-spacing: -0.02em;
-        }
-
-        .page-header .badge {
-            background: var(--primary);
-            color: #fff;
-            font-size: 0.7rem;
-            font-weight: 600;
-            padding: 2px 8px;
-            border-radius: 20px;
-            letter-spacing: 0.04em;
-        }
-
-        /* ── 卡片 ── */
-        .card {
-            background: var(--surface);
-            border-radius: var(--radius);
-            border: 1px solid var(--border);
-            box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06), 0 4px 16px rgba(15, 23, 42, 0.04);
-            max-width: 1080px;
-            margin: 0 auto 20px;
-            overflow: hidden;
-        }
-
-        .card-body {
-            padding: 24px 28px;
-        }
-
-        /* ── 上傳區 ── */
-        .upload-area {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            padding: 18px 20px;
-            background: var(--primary-light);
-            border: 2px dashed #a5b4fc;
-            border-radius: var(--radius);
-            margin-bottom: 22px;
-            transition: border-color 0.2s, background 0.2s;
-        }
-
-        .upload-area:hover {
-            border-color: var(--primary);
-            background: #e0e7ff;
-        }
-
-        .upload-area input[type=file] {
-            flex: 1;
-            font-size: 0.9rem;
-            color: var(--slate);
-        }
-
-        .upload-icon {
-            font-size: 1.6rem;
-            flex-shrink: 0;
-        }
-
-        /* ── 按鈕 ── */
-        .btn-download {
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 0.88rem;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: background 0.2s, transform 0.1s;
-        }
-
-        .btn-download:hover {
-            background: #4f46e5;
-        }
-
-        .btn-download:active {
-            transform: scale(0.97);
-        }
-
-        /* ── 欄位表格 ── */
-        .info-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.84rem;
-        }
-
-        .info-table thead tr {
-            background: var(--navy);
-        }
-
-        .info-table th {
-            color: #cbd5e1;
-            padding: 9px 14px;
-            text-align: left;
-            font-weight: 600;
-            letter-spacing: 0.03em;
-        }
-
-        .info-table td {
-            padding: 8px 14px;
-            border-bottom: 1px solid var(--border);
-            color: var(--slate);
-            vertical-align: middle;
-        }
-
-        .info-table tr:last-child td {
-            border-bottom: none;
-        }
-
-        .info-table tr:nth-child(even) td {
-            background: #f8fafc;
-        }
-
-        .col-badge {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 22px;
-            height: 22px;
-            background: var(--primary);
-            color: #fff;
-            border-radius: 5px;
-            font-weight: 700;
-            font-size: 0.78rem;
-            margin-right: 6px;
-            flex-shrink: 0;
-        }
-
-        /* ── 規則列表 ── */
-        .rules-list {
-            margin: 16px 0 0;
-            padding: 0;
-            list-style: none;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .rules-list li {
-            background: #f8fafc;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 6px 12px;
-            font-size: 0.82rem;
-            color: var(--slate);
-            line-height: 1.5;
-        }
-
-        /* ── 衝突卡片 ── */
-        .conflict-card {
-            background: var(--danger-bg);
-            border: 1px solid var(--danger-border);
-            border-left: 5px solid var(--danger);
-            border-radius: var(--radius);
-            padding: 14px 18px;
-            margin-bottom: 12px;
-        }
-
-        .conflict-card .cc-name {
-            font-weight: 700;
-            font-size: 0.98rem;
-            color: #9f1239;
-            margin-bottom: 6px;
-        }
-
-        .conflict-card .cc-row {
-            font-size: 0.84rem;
-            color: #be123c;
-            padding: 2px 0;
-        }
-
-        .success-msg {
-            background: var(--success-bg);
-            color: #065f46;
-            border: 1px solid #6ee7b7;
-            border-radius: var(--radius);
-            padding: 14px 20px;
-            font-weight: 600;
-            text-align: center;
-            margin-bottom: 12px;
-        }
-
-        /* ── 甘特圖 ── */
-        .timeline-container {
-            overflow-x: auto;
-        }
-
-        .gantt-section-title {
-            font-size: 0.88rem;
-            font-weight: 700;
-            color: var(--muted);
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            margin: 0 0 16px;
-        }
-
-        /* 日期分組 */
-        .date-group-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
-            color: #e2e8f0;
-            padding: 10px 18px;
-            border-radius: var(--radius) var(--radius) 0 0;
-            font-weight: 700;
-            font-size: 0.97rem;
-            letter-spacing: 0.01em;
-            margin-top: 20px;
-        }
-
-        .date-group-header .conflict-count {
-            background: var(--danger);
-            color: #fff;
-            font-size: 0.72rem;
-            font-weight: 700;
-            padding: 2px 9px;
-            border-radius: 20px;
-            letter-spacing: 0.04em;
-        }
-
-        .date-group {
-            border: 1px solid var(--border);
-            border-top: none;
-            border-radius: 0 0 var(--radius) var(--radius);
-            background: var(--surface);
-            padding: 18px 18px 8px;
-        }
-
-        /* 人員列 */
-        .person-row {
-            margin-bottom: 18px;
-            page-break-inside: avoid;
-            break-inside: avoid;
-        }
-
-        .person-name {
-            font-weight: 600;
-            font-size: 0.88rem;
-            color: var(--slate);
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        /* 軌道 */
-        .gantt-track {
-            position: relative;
-            height: 38px;
-            background: #f1f5f9;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-        }
-
-        .time-label {
-            position: absolute;
-            font-size: 9px;
-            color: var(--muted);
-            top: -16px;
-            transform: translateX(-50%);
-            white-space: nowrap;
-        }
-
-        /* 行程色塊 */
-        .job-block {
-            position: absolute;
-            height: 78%;
-            top: 11%;
-            background: var(--primary);
-            color: #fff;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            font-weight: 500;
-            overflow: hidden;
-            white-space: nowrap;
-            box-shadow: 0 1px 3px rgba(99, 102, 241, 0.35);
-            z-index: 10;
-            transition: opacity 0.15s;
-        }
-
-        .job-block:hover {
-            opacity: 0.85;
-        }
-
-        .job-block.has-conflict {
-            background: var(--danger);
-            box-shadow: 0 0 0 2px #fda4af, 0 1px 4px rgba(244, 63, 94, 0.4);
-            z-index: 20;
-            animation: pulse 1.6s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                box-shadow: 0 0 0 2px #fda4af, 0 1px 4px rgba(244, 63, 94, 0.4);
-            }
-
-            50% {
-                box-shadow: 0 0 0 4px #fecdd3, 0 1px 8px rgba(244, 63, 94, 0.3);
-            }
-        }
-
-        /* 文字行號列 */
-        .event-text-list {
-            margin: 5px 0 8px;
-            padding-left: 2px;
-            line-height: 1;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-
-        .ev-item {
-            font-size: 0.75rem;
-            color: #64748b;
-            background: #f1f5f9;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 2px 8px;
-            white-space: nowrap;
-        }
-
-        .ev-item.conflict {
-            color: var(--danger);
-            background: var(--danger-bg);
-            border-color: var(--danger-border);
-            font-weight: 600;
-        }
-
-        /* ── 月曆視圖 ── */
-        .calendar-wrapper {
-            margin-bottom: 20px;
-        }
-
-        .calendar-month-title {
-            font-size: 1.15rem;
-            font-weight: 700;
-            color: var(--navy);
-            margin: 0 0 12px;
-            padding-bottom: 6px;
-            border-bottom: 2px solid var(--border);
-        }
-
-        .calendar-grid {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 1px;
-            background: var(--border);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            overflow: hidden;
-            margin-bottom: 30px;
-        }
-
-        .calendar-header-day {
-            background: #f8fafc;
-            padding: 10px 4px;
-            text-align: center;
-            font-weight: 600;
-            font-size: 0.85rem;
-            color: var(--slate);
-        }
-
-        .calendar-cell {
-            background: var(--surface);
-            min-height: 120px;
-            padding: 6px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .calendar-cell.empty {
-            background: #fafafa;
-        }
-
-        .calendar-date-num {
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: var(--slate);
-            margin-bottom: 4px;
-        }
-
-        .calendar-event {
-            font-size: 0.75rem;
-            padding: 4px 6px;
-            border-radius: 4px;
-            border: 1px solid transparent;
-            background: var(--primary-light);
-            color: var(--primary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            line-height: 1.3;
-            font-weight: 600;
-            text-align: center;
-            cursor: pointer;
-        }
-
-        .calendar-event.conflict {
-            background: var(--danger-bg);
-            color: var(--danger);
-            border: 1px solid var(--danger-border);
-        }
-
-        /* ── 月曆篩選器 ── */
-        .filter-btn {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            cursor: pointer;
-            border: 1px solid var(--border);
-            background: #f8fafc;
-            color: var(--slate);
-            transition: all 0.2s;
-        }
-
-        .filter-btn:hover {
-            filter: brightness(0.95);
-        }
-
-        .filter-btn.active {
-            box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--navy);
-        }
-
-        /* ── 時間網格：按週換行 ── */
-        .tg-week-row {
-            display: flex;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            overflow: hidden;
-            margin-bottom: 12px;
-            background: var(--surface);
-        }
-
-        .tg-time-axis {
-            width: 50px;
-            flex-shrink: 0;
-            border-right: 1px solid var(--border);
-            background: #f8fafc;
-            position: sticky;
-            left: 0;
-            z-index: 10;
-        }
-
-        .tg-axis-header {
-            height: 40px;
-            border-bottom: 1px solid var(--border);
-            background: var(--navy);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.8rem;
-            font-weight: bold;
-        }
-
-        .tg-axis-cell {
-            border-bottom: 1px solid var(--border);
-            box-sizing: border-box;
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            padding-right: 8px;
-            font-size: 0.75rem;
-            color: var(--slate);
-        }
-
-        .tg-days-container {
-            display: flex;
-            flex: 1;
-        }
-
-        .tg-day-col {
-            flex: 1;
-            min-width: 0;
-            border-right: 1px solid #e2e8f0;
-            position: relative;
-        }
-
-        .tg-day-col:last-child {
-            border-right: none;
-        }
-
-        .tg-day-header {
-            height: 40px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            background: #f8fafc;
-            border-bottom: 1px solid var(--border);
-            font-weight: 600;
-            font-size: 0.8rem;
-            color: var(--slate);
-        }
-
-        .tg-day-header.empty-header {
-            background: #fafafa;
-            color: transparent;
-        }
-
-        .tg-hour-cell {
-            border-bottom: 1px dashed #e2e8f0;
-            box-sizing: border-box;
-            display: grid;
-            grid-template-columns: repeat(3, 36px);
-            gap: 4px;
-            padding: 4px;
-            overflow: hidden;
-            align-content: flex-start;
-            justify-content: center;
-        }
-
-        .tg-person-dot {
-            width: 36px;
-            height: 36px;
-            box-sizing: border-box;
-            flex-shrink: 0;
-            border-radius: 8px;
-            font-size: 18px;
-            font-weight: 800;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow:
-                0 2px 4px rgba(0, 0, 0, 0.06),
-                inset 0 0 0 1px rgba(255, 255, 255, 0.4);
-            cursor: pointer;
-            border: 1px solid rgba(0, 0, 0, 0.08);
-            transition: transform 0.1s, box-shadow 0.1s;
-        }
-
-        .tg-person-dot:active {
-            transform: scale(0.95);
-        }
-
-        .tg-person-dot.is-dimmed {
-            background-color: #e2e8f0 !important;
-            color: #94a3b8 !important;
-            box-shadow: none !important;
-            border-color: transparent !important;
-            opacity: 0.35 !important;
-            transform: scale(0.9);
-        }
-
-        /* 個人視圖特別樣式 */
-        .is-personal .tg-hour-cell {
-            grid-template-columns: 1fr;
-            padding: 0;
-            gap: 0;
-            align-content: stretch;
-            justify-items: stretch;
-        }
-
-        .is-personal .tg-person-dot {
-            width: 100%;
-            height: 100%;
-            border-radius: 0;
-            font-size: 0.95rem;
-            justify-content: center;
-            padding-left: 0;
-            border: none;
-            box-shadow: none;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<title>防治排班系統</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap');
+:root{--bg:#f8f9fa;--surface:#ffffff;--surface2:#f0f2f5;--border:#e5e7eb;--accent:#2563a8;--accent2:#7c3aed;--green:#15803d;--orange:#c2610a;--red:#c81e3a;--yellow:#b45309;--text:#1a2540;--text2:#4b5563;--text3:#9ca3af;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans TC',sans-serif;font-weight:300;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;color-scheme:light;}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap;z-index:200;}
+.logo{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;}
+.logo-icon{width:28px;height:28px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;}
+.btn{border:none;cursor:pointer;border-radius:8px;padding:7px 14px;font-family:'Noto Sans TC',sans-serif;font-size:12px;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:5px;}
+.btn-primary{background:var(--accent);color:#fff;}.btn-primary:hover{background:#1e50a0;}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border);}.btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+.btn-success{background:var(--green);color:#fff;}
+.btn-danger{background:var(--red);color:#fff;}
+.stat-chips{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;}
+.stat-chip{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 9px;font-size:11px;color:var(--text2);}
+.stat-chip span{color:var(--text);font-weight:400;margin-left:3px;}
+.tab-strip{display:flex;gap:2px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;}
+.tab{padding:9px 14px;font-size:12px;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;user-select:none;white-space:nowrap;}
+.tab:hover{color:var(--text);}.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-content{display:none;flex:1;overflow:hidden;}
+.tab-content.active{display:flex;flex-direction:column;}
+.scrollable{flex:1;overflow:auto;padding:14px;}
+.with-sidebar{display:flex;flex:1;overflow:hidden;}
+.sidebar{width:195px;min-width:195px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;padding:12px 10px;gap:14px;}
+.filter-group label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);display:block;margin-bottom:5px;}
+.filter-item{display:flex;align-items:center;gap:7px;padding:4px 7px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--text2);user-select:none;}
+.filter-item:hover{background:var(--surface2);color:var(--text);}
+.filter-item.active{background:rgba(37,99,168,.15);color:var(--accent);}
+.filter-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.search-box{display:flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 9px;}
+.search-box input{background:none;border:none;color:var(--text);font-size:12px;outline:none;width:100%;font-family:'Noto Sans TC',sans-serif;}
+.search-box input::placeholder{color:var(--text3);}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead tr{background:var(--surface2);position:sticky;top:0;z-index:10;}
+th{padding:9px 11px;text-align:left;font-weight:500;color:var(--text2);font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);white-space:nowrap;}
+td{padding:7px 11px;border-bottom:1px solid rgba(229,231,235,.8);vertical-align:middle;}
+tr:hover td{background:rgba(37,99,168,.04);}
+tr.excluded{opacity:.35;}
+tr.modified td:first-child{border-left:2px solid var(--yellow);}
+tr.conflict-row td:first-child{border-left:2px solid var(--red);}
+.client-name{font-weight:400;color:var(--text);max-width:320px;white-space:normal;overflow:visible;word-break:break-all;}
+.client-group{font-size:10px;color:var(--text3);margin-top:1px;}
+.badge{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:500;white-space:nowrap;}
+.badge-fixed{background:rgba(194,97,10,.15);color:var(--orange);}
+.badge-normal{background:rgba(37,99,168,.1);color:var(--accent);}
+.badge-north{background:rgba(21,128,61,.1);color:var(--green);}
+.badge-south{background:rgba(124,58,237,.1);color:var(--accent2);}
+.tech-tag{display:inline-flex;align-items:center;padding:1px 7px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--text2);}
+.tech-tag-btn{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;font-size:11px;color:var(--text2);cursor:pointer;transition:all .12s;white-space:nowrap;}
+.tech-tag-btn:hover{border-color:var(--accent);color:var(--accent);}
+#tech-dropdown{position:fixed;z-index:1001;background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);display:none;min-width:180px;}
+#tech-dropdown .td-title{font-size:10px;color:var(--text3);margin-bottom:7px;}
+#tech-dropdown .td-list{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:9px;}
+#tech-dropdown .td-actions{display:flex;gap:6px;}
+#tech-dropdown .td-actions .btn{flex:1;justify-content:center;font-size:11px;padding:5px 8px;}
+.date-entry{display:flex;align-items:center;gap:5px;margin-bottom:3px;}
+.date-entry:last-child{margin-bottom:0;}
+.task-label{font-size:9px;color:var(--text3);min-width:52px;flex-shrink:0;}
+.date-pill{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;min-width:72px;text-align:center;}
+.date-pill:hover{border-color:var(--accent);color:var(--accent);}
+.date-pill.conflict{border-color:var(--red);color:var(--red);}
+.holiday-tag{background:rgba(200,30,58,.15);color:var(--red);border-radius:3px;padding:0 3px;font-size:9px;}
+.excl-btn{background:none;border:1px solid var(--border);border-radius:4px;color:var(--text3);cursor:pointer;padding:2px 8px;font-size:10px;font-family:'Noto Sans TC',sans-serif;}
+.excl-btn:hover{border-color:var(--red);color:var(--red);}
+tr.excluded .excl-btn{border-color:var(--green);color:var(--green);}
+.empty{text-align:center;padding:40px;color:var(--text3);}
+.import-hint{display:flex;align-items:center;justify-content:center;height:60vh;flex-direction:column;gap:16px;color:var(--text3);}
+.import-hint .icon{font-size:56px;opacity:.2;}
+.import-hint h2{font-size:16px;color:var(--text2);font-weight:400;}
+.import-hint p{font-size:12px;color:var(--text3);text-align:center;line-height:1.8;max-width:340px;}
+textarea.export-box{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;padding:10px;resize:vertical;outline:none;line-height:1.7;}
+.export-section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;}
+.export-section h3{font-size:12px;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;gap:7px;}
+.export-section h3::before{content:'';width:3px;height:13px;background:var(--accent);border-radius:2px;display:inline-block;}
+.batch-label{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:5px;font-size:11px;font-weight:400;margin-bottom:10px;}
+.batch-1{background:rgba(194,97,10,.15);color:var(--orange);border:1px solid rgba(194,97,10,.3);}
+.batch-2{background:rgba(37,99,168,.15);color:var(--accent);border:1px solid rgba(37,99,168,.3);}
+.dv-header{background:var(--surface);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;gap:9px;flex-shrink:0;flex-wrap:wrap;}
+.nav-btn{background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);cursor:pointer;padding:5px 12px;font-size:15px;line-height:1;}
+.nav-btn:hover{border-color:var(--accent);color:var(--accent);}
+.date-display{font-family:'DM Mono',monospace;font-size:13px;font-weight:500;min-width:120px;text-align:center;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:5px 10px;}
+.today-btn{background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text2);cursor:pointer;padding:5px 10px;font-size:11px;font-family:'Noto Sans TC',sans-serif;}
+.today-btn:hover{border-color:var(--accent);color:var(--accent);}
+.holiday-input-wrap{display:flex;align-items:center;gap:6px;margin-left:4px;}
+.holiday-input-wrap label{font-size:10px;color:var(--text3);white-space:nowrap;}
+.holiday-input-wrap input{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;padding:4px 8px;outline:none;font-family:'DM Mono',monospace;width:200px;}
+.holiday-input-wrap input:focus{border-color:var(--orange);}
+.conflict-bar{background:rgba(200,30,58,.1);border:1px solid rgba(200,30,58,.3);border-radius:7px;padding:6px 12px;margin:6px 14px 0;font-size:11px;color:var(--red);display:none;align-items:center;gap:6px;flex-wrap:wrap;}
+.conflict-bar.show{display:flex;}
+.dv-grid{display:flex;flex:1;overflow:hidden;}
+.dv-sync-scroll{flex:1;overflow:auto;background:var(--bg);}
+.dv-content{display:flex;flex-direction:column;}
+.dv-rows-wrap{display:flex;}
+.tech-rows-col{width:100px;min-width:100px;background:#f0f2f5;border-right:1px solid var(--border);flex-shrink:0;position:sticky;left:0;z-index:20;}
+.dv-time-spacer{height:38px;background:#f0f2f5;border-bottom:1px solid var(--border);border-right:1px solid var(--border);position:sticky;top:0;left:0;z-index:30;width:100px;min-width:100px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;}
+.dv-time-header{height:38px;display:flex;position:sticky;top:0;z-index:100;background:var(--surface2);border-bottom:1px solid var(--border);}
+.time-mark-dv{position:absolute;top:0;bottom:0;display:flex;align-items:center;font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);padding-left:2px;border-left:1px solid var(--border);white-space:nowrap;}
+.time-mark-dv.hour{color:var(--text2);font-size:10px;border-left-color:rgba(37,99,168,.3);}
+.tech-row-label-dv{height:60px;min-height:60px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:400;padding:0 5px;text-align:center;position:relative;}
+.conflict-badge{position:absolute;top:3px;right:3px;background:var(--red);color:#fff;border-radius:10px;font-size:9px;padding:1px 5px;font-weight:500;}
+.holiday-badge-tech{position:absolute;top:3px;right:3px;background:var(--orange);color:#fff;border-radius:10px;font-size:9px;padding:1px 5px;font-weight:500;}
+.dv-rows{position:relative;}
+.dv-row{height:60px;border-bottom:1px solid var(--border);position:relative;background:#ffffff;}
+.dv-row.has-conflict{background:rgba(200,30,58,.04);}
+.seg-rest-bg{position:absolute;top:0;bottom:0;background:rgba(240,242,245,.9);}
+.vline-h{position:absolute;top:0;bottom:0;width:1px;background:rgba(37,99,168,.15);pointer-events:none;}
+.vline-hf{position:absolute;top:0;bottom:0;width:1px;background:rgba(229,231,235,.6);pointer-events:none;}
+.dv-job{position:absolute;top:4px;bottom:4px;border-radius:5px;padding:2px 5px 2px 8px;overflow:hidden;cursor:grab;border:1px solid transparent;border-left-width:3px;transition:filter .15s,opacity .15s;z-index:10;display:flex;flex-direction:column;justify-content:center;}
+.dv-job:hover{z-index:20;filter:brightness(1.1);}
+.dv-job.dragging{opacity:.4;cursor:grabbing;}
+.dv-job.is-conflict{border-width:2px;border-style:dashed;}
+.dv-row.drag-over{background:rgba(37,99,168,.08)!important;outline:2px dashed var(--accent);outline-offset:-2px;}
+.drag-ghost{position:fixed;pointer-events:none;z-index:9999;border-radius:5px;padding:4px 8px;font-size:11px;font-family:'Noto Sans TC',sans-serif;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.2);opacity:.92;}
+.drop-time-hint{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);z-index:25;pointer-events:none;}
+.drop-time-label{position:absolute;top:2px;background:var(--accent);color:#fff;font-size:9px;font-family:'DM Mono',monospace;padding:1px 4px;border-radius:3px;z-index:26;pointer-events:none;white-space:nowrap;}
+.dv-job-name{font-weight:300;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1a2540;}
+.dv-job-time{font-size:8px;opacity:.75;font-family:'DM Mono',monospace;margin-top:1px;}
+.conflict-indicator{font-size:8px;color:var(--red);margin-top:1px;font-weight:500;}
+.now-line-dv{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:30;pointer-events:none;}
+.now-line-dv::before{content:'';position:absolute;top:-3px;left:-4px;width:9px;height:9px;border-radius:50%;background:var(--red);}
+#popup-overlay{display:none;position:fixed;inset:0;z-index:998;}
+#date-popup{position:fixed;z-index:999;background:var(--surface);border:1px solid var(--yellow);border-radius:10px;padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.15);display:none;min-width:210px;}
+.popup-title{font-size:11px;color:var(--yellow);font-weight:400;margin-bottom:8px;line-height:1.4;}
+.popup-label{font-size:10px;color:var(--text3);margin-bottom:5px;}
+#popup-date-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;padding:7px 10px;outline:none;font-family:'DM Mono',monospace;box-sizing:border-box;}
+#popup-date-input:focus{border-color:var(--yellow);}
+.popup-actions{display:flex;gap:7px;margin-top:9px;}
+.popup-actions .btn{flex:1;justify-content:center;}
+#move-popup{position:fixed;z-index:999;background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.15);display:none;min-width:240px;}
+#move-popup h4{font-size:12px;color:var(--accent);margin-bottom:7px;}
+.move-name{font-size:11px;color:var(--yellow);font-weight:400;margin-bottom:10px;line-height:1.4;}
+.move-row{display:flex;align-items:center;gap:7px;margin-bottom:7px;}
+.move-lbl{font-size:10px;color:var(--text3);width:50px;flex-shrink:0;}
+.move-inp{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;padding:5px 9px;outline:none;font-family:'DM Mono',monospace;}
+.move-inp:focus{border-color:var(--accent);}
+.move-inp option{background:var(--surface2);}
+.move-acts{display:flex;gap:7px;margin-top:10px;}
+.move-acts .btn{flex:1;justify-content:center;}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:center;justify-content:center;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;width:480px;max-width:95vw;max-height:88vh;overflow-y:auto;}
+.modal-box h3{font-size:14px;font-weight:400;margin-bottom:16px;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.form-full{grid-column:1/-1;}
+.form-label{font-size:10px;color:var(--text3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px;}
+.form-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;padding:6px 9px;outline:none;font-family:'Noto Sans TC',sans-serif;}
+.form-input:focus{border-color:var(--accent);}
+.form-input option{background:var(--surface2);}
+.modal-actions{display:flex;gap:7px;margin-top:16px;justify-content:flex-end;}
+.edit-btn{background:none;border:1px solid var(--border);border-radius:4px;color:var(--accent);cursor:pointer;padding:2px 8px;font-size:10px;font-family:'Noto Sans TC',sans-serif;}
+.del-btn{background:none;border:1px solid var(--border);border-radius:4px;color:var(--text3);cursor:pointer;padding:2px 8px;font-size:10px;font-family:'Noto Sans TC',sans-serif;margin-left:3px;}
+.del-btn:hover{border-color:var(--red);color:var(--red);}
+.move-tech-cb{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:5px;border:1.5px solid var(--border);font-size:11px;cursor:pointer;user-select:none;transition:all .12s;background:var(--surface2);color:var(--text2);}
+.move-tech-cb.selected{border-color:var(--accent);background:rgba(37,99,168,.12);color:var(--accent);font-weight:500;}
+.move-tech-cb input{display:none;}
+.avail-tech-tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:400;cursor:pointer;border:1px solid;}
+.avail-tech-tag:hover{filter:brightness(1.1);}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+.month-picker{display:flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:5px 10px;}
+.month-picker label{font-size:11px;color:var(--text2);}
+.month-picker input[type=month]{background:none;border:none;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;width:130px;color-scheme:light;cursor:pointer;}
+.month-picker input[type=month]::-webkit-calendar-picker-indicator{opacity:1;cursor:pointer;filter:invert(30%) sepia(80%) saturate(400%) hue-rotate(190deg);width:18px;height:18px;}
+.workload-grid{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;}
+.workload-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:120px;}
+.workload-name{font-size:11px;font-weight:400;margin-bottom:4px;}
+.workload-count{font-size:24px;font-weight:500;font-family:'DM Mono',monospace;}
+.workload-sub{font-size:10px;color:var(--text3);margin-top:2px;}
+.workload-bar-bg{height:3px;border-radius:2px;margin-top:7px;background:var(--surface2);}
+.workload-bar-fill{height:3px;border-radius:2px;}
+.import-banner{background:rgba(37,99,168,.06);border:1px solid rgba(37,99,168,.2);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+/* ── 週覽 ── */
+.wv-week-btn{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:5px 12px;font-size:12px;color:var(--text2);cursor:pointer;font-family:'Noto Sans TC',sans-serif;transition:all .12s;}
+.wv-week-btn:hover{border-color:var(--accent);color:var(--accent);}
+.wv-week-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.wv-table{width:100%;border-collapse:collapse;table-layout:fixed;}
+.wv-th-tech{width:80px;min-width:80px;background:var(--surface2);border:1px solid var(--border);padding:6px 4px;font-size:10px;text-align:center;color:var(--text2);position:sticky;left:0;z-index:10;}
+.wv-th-day{background:var(--surface2);border:1px solid var(--border);padding:5px 4px;font-size:11px;text-align:center;color:var(--text2);}
+.wv-th-day.today{background:rgba(37,99,168,.12);color:var(--accent);}
+.wv-th-day.holiday{background:rgba(200,30,58,.07);color:var(--red);}
+.wv-cell{border:1px solid var(--border);padding:3px;vertical-align:top;min-height:52px;position:relative;background:#fff;}
+.wv-cell.holiday-col{background:rgba(200,30,58,.03);}
+.wv-cell.tech-label{background:var(--surface2);font-size:11px;font-weight:400;text-align:center;color:var(--text2);padding:4px 2px;position:sticky;left:0;z-index:5;}
+.wv-cell.on-hol{background:rgba(194,97,10,.05);}
+.wv-job{border-radius:4px;padding:2px 5px;margin-bottom:2px;font-size:10px;cursor:grab;border-left:3px solid;line-height:1.3;transition:filter .12s,opacity .15s;position:relative;}
+.wv-job:hover{filter:brightness(1.08);}
+.wv-job.wv-dragging{opacity:.35;cursor:grabbing;}
+.wv-job-name{font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.wv-job-time{font-size:9px;font-family:'DM Mono',monospace;opacity:.8;margin-top:1px;}
+.wv-job.is-conflict{border-style:dashed;border-width:1px 1px 1px 3px;}
+.wv-cell.wv-drag-over{background:rgba(37,99,168,.10)!important;outline:2px dashed var(--accent);outline-offset:-2px;}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
-
 <body>
+<div id="popup-overlay" onclick="closePopup()"></div>
+<div id="date-popup" onclick="event.stopPropagation()">
+<div class="popup-title" id="popup-title"></div>
+<div class="popup-label">輸入新日期（例：5/15）</div>
+<input type="text" id="popup-date-input" placeholder="5/15 或 2026-05-15">
+<div class="popup-label" style="margin-top:8px">開始時間（例：14:30）</div>
+<input type="text" id="popup-time-input" placeholder="HH:MM（留空則不更改）" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:7px 10px;outline:none;font-family:'DM Mono',monospace;box-sizing:border-box;margin-top:4px;">
+<div class="popup-actions">
+<button class="btn btn-primary" onclick="confirmDateEdit()">✓ 確認</button>
+<button class="btn btn-ghost" onclick="closePopup()">取消</button>
+</div>
+</div>
+<div id="date-jump-popup" style="display:none;position:fixed;z-index:1000;background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:14px;box-shadow:0 4px 20px rgba(0,0,0,.12);min-width:200px;" onclick="event.stopPropagation()">
+<div style="font-size:11px;color:#9ca3af;margin-bottom:8px;">快速跳轉到</div>
+<input type="month" id="jump-month-input" style="width:100%;background:#f8f9fa;border:1px solid #e5e7eb;border-radius:6px;color:#1a2540;font-size:14px;padding:7px 10px;outline:none;font-family:'DM Mono',monospace;margin-bottom:8px;color-scheme:light;">
+<input type="date" id="jump-date-input" style="width:100%;background:#f8f9fa;border:1px solid #e5e7eb;border-radius:6px;color:#1a2540;font-size:14px;padding:7px 10px;outline:none;font-family:'DM Mono',monospace;margin-bottom:10px;color-scheme:light;">
+<div style="display:flex;gap:6px;">
+<button class="btn btn-primary" onclick="confirmDateJump()" style="flex:1;justify-content:center;">✓ 跳轉</button>
+<button class="btn btn-ghost" onclick="closeDateJump()" style="flex:1;justify-content:center;">取消</button>
+</div>
+</div>
+<div id="tech-dropdown" onclick="event.stopPropagation()" style="display:none;position:fixed;">
+<div class="td-title">選擇防治師（可多選）</div>
+<div class="td-list" id="td-list"></div>
+<div class="td-actions">
+<button class="btn btn-primary" onclick="confirmTechEdit()">✓ 確認</button>
+<button class="btn btn-ghost" onclick="closeTechDropdown()">取消</button>
+</div>
+</div>
+<div id="move-popup" onclick="event.stopPropagation()">
+<h4>📅 移動案場</h4>
+<div class="move-name" id="move-name"></div>
+<div id="available-techs-section" style="display:none;margin-bottom:10px;">
+<div style="font-size:10px;color:var(--green);margin-bottom:5px;font-weight:400">✅ 同區域可替換防治師</div>
+<div id="available-techs-list" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+</div>
+<div id="conflict-warn" style="display:none;font-size:10px;color:var(--red);margin-bottom:8px;padding:5px 8px;background:rgba(200,30,58,.08);border-radius:5px;"></div>
+<div class="move-row"><span class="move-lbl">移到日期</span><input type="text" class="move-inp" id="move-date" placeholder="例：5/15"></div>
+<div class="move-row"><span class="move-lbl">開始時間</span><input type="text" class="move-inp" id="move-time" placeholder="例：14:30"></div>
+<div class="move-row" style="align-items:flex-start"><span class="move-lbl" style="padding-top:3px">防治師</span><div id="move-tech-list" style="display:flex;flex-wrap:wrap;gap:5px;flex:1;"></div></div>
+<div class="move-acts">
+<button class="btn btn-primary" onclick="confirmMove()">✓ 確認</button>
+<button class="btn btn-ghost" onclick="closeMovePopup()">取消</button>
+</div>
+</div>
+<div class="modal-overlay" id="client-modal" onclick="if(event.target===this)closeClientModal()">
+<div class="modal-box" onclick="event.stopPropagation()">
+<h3 id="modal-title">新增 / 編輯客戶資料</h3>
+<input type="hidden" id="cf-edit-idx" value="-1">
+<div class="form-grid">
+<div class="form-full"><label class="form-label">客戶名稱 *</label><input class="form-input" id="cf-name" placeholder="例：ABC餐廳_台北信義店"></div>
+<div class="form-full"><label class="form-label">公司群組</label><input class="form-input" id="cf-group" placeholder="例：ABC集團"></div>
+<div><label class="form-label">地區</label><input class="form-input" id="cf-area" placeholder="例：台北市信義區"></div>
+<div><label class="form-label">北/中南</label><select class="form-input" id="cf-region"><option value="北">北部</option><option value="中南">中南部</option></select></div>
+<div><label class="form-label">負責防治師 *</label><input class="form-input" id="cf-tech" placeholder="例：Joe 或 Joe, Ray"></div>
+<div><label class="form-label">開始時間</label><input class="form-input" id="cf-time" placeholder="例：22:30"></div>
+<div><label class="form-label">施作時長（分鐘）</label><input class="form-input" id="cf-duration" type="number" placeholder="45" min="1"></div>
+<div><label class="form-label">固定客戶</label><select class="form-input" id="cf-fixed"><option value="0">否（例行）</option><option value="1">是（固定日期）</option></select></div>
+<div><label class="form-label">需申請進場工單</label><select class="form-input" id="cf-permit"><option value="0">否</option><option value="1">是</option></select></div>
+</div>
+<div style="margin-top:10px;padding:8px 10px;background:var(--surface2);border-radius:6px;font-size:11px;color:var(--text3);">
+💡 排班日期由每月匯入的 Excel 決定，此處不需設定排班規則。
+</div>
+<div class="modal-actions">
+<button class="btn btn-ghost" onclick="closeClientModal()">取消</button>
+<button class="btn btn-danger" id="cf-del-btn" onclick="deleteClient()" style="display:none">🗑 刪除</button>
+<button class="btn btn-success" onclick="saveClient()">💾 儲存</button>
+</div>
+</div>
+</div>
+
+<header>
+<div class="logo"><div class="logo-icon">🦟</div>防治排班系統</div>
+<input type="hidden" id="target-month" value="2026-05">
+<label class="btn btn-primary" style="cursor:pointer;" title="匯入Excel行程明細（以F欄日期為準）">
+📥 匯入 Excel 排班
+<input type="file" id="import-file" accept=".xlsx" style="display:none" onchange="importExcel(this)">
+</label>
+<button class="btn btn-ghost" onclick="resetExclusions()">↩ 重設排除</button>
+<button class="btn btn-ghost" onclick="undo()" id="undo-btn" style="display:none" title="復原上一步 (Ctrl+Z)">⎌ 復原</button>
+<button class="btn btn-success" onclick="saveSchedule()" id="save-btn" style="display:none">💾 儲存排班</button>
+<div id="save-status" style="font-size:10px;color:#15803d;display:none;align-items:center;gap:4px;"></div>
+<div class="stat-chips">
+<div class="stat-chip">總數<span id="s-total">—</span></div>
+<div class="stat-chip">發送<span id="s-bot">—</span></div>
+<div class="stat-chip">排除<span id="s-excl">—</span></div>
+<div class="stat-chip" id="s-conflict-chip" style="display:none;border-color:var(--red);color:var(--red)">⚠️ 衝堂<span id="s-conflict">0</span></div>
+</div>
+</header>
+
+<div class="tab-strip">
+<div class="tab active" id="tab-btn-schedule" onclick="switchTab('schedule')">📋 排班明細</div>
+<div class="tab" id="tab-btn-dayview" onclick="switchTab('dayview')">📅 DayView</div>
+<div class="tab" id="tab-btn-weekview" onclick="switchTab('weekview')">📆 週覽</div>
+<div class="tab" id="tab-btn-bot" onclick="switchTab('bot')">🤖 機器人清單</div>
+<div class="tab" id="tab-btn-export" onclick="switchTab('export')">📤 匯出</div>
+<div class="tab" id="tab-btn-workload" onclick="switchTab('workload')">📊 工作量</div>
+<div class="tab" id="tab-btn-clients" onclick="switchTab('clients')">👥 客戶管理</div>
+</div>
+
+<div id="tab-schedule" class="tab-content active">
+<div class="with-sidebar">
+<div class="sidebar">
+<div class="search-box"><span style="color:var(--text3)">🔍</span><input type="text" id="search" placeholder="搜尋客戶/防治師..." oninput="applyFilters()"></div>
+<div class="filter-group"><label>防治師</label><div id="tech-filter-list"></div></div>
+<div class="filter-group"><label>區域</label><div>
+<div class="filter-item active" onclick="setFilter('region','all',this)"><div class="filter-dot" style="background:var(--text3)"></div>全部</div>
+<div class="filter-item" onclick="setFilter('region','北',this)"><div class="filter-dot" style="background:var(--green)"></div>北部</div>
+<div class="filter-item" onclick="setFilter('region','中南',this)"><div class="filter-dot" style="background:var(--accent2)"></div>中南部</div>
+</div></div>
+<div class="filter-group"><label>類型</label><div>
+<div class="filter-item active" onclick="setFilter('type','all',this)"><div class="filter-dot" style="background:var(--text3)"></div>全部</div>
+<div class="filter-item" onclick="setFilter('type','fixed',this)"><div class="filter-dot" style="background:var(--orange)"></div>固定日期</div>
+<div class="filter-item" onclick="setFilter('type','normal',this)"><div class="filter-dot" style="background:var(--accent)"></div>例行</div>
+</div></div>
+<div class="filter-group"><label>狀態</label><div>
+<div class="filter-item active" onclick="setFilter('status','all',this)"><div class="filter-dot" style="background:var(--text3)"></div>全部</div>
+<div class="filter-item" onclick="setFilter('status','included',this)"><div class="filter-dot" style="background:var(--green)"></div>發送中</div>
+<div class="filter-item" onclick="setFilter('status','excluded',this)"><div class="filter-dot" style="background:var(--red)"></div>已排除</div>
+<div class="filter-item" onclick="setFilter('status','conflict',this)"><div class="filter-dot" style="background:var(--red)"></div>⚠️ 有衝堂</div>
+</div></div>
+</div>
+<div class="scrollable">
+<div class="import-hint" id="hint">
+<div class="icon">📥</div>
+<h2>請匯入 Excel 排班檔案</h2>
+<p>點擊上方「📥 匯入 Excel 排班」按鈕，<br>上傳含有「5月新日期」欄位的行程 Excel，<br>系統將直接讀取日期並展開排班。</p>
+<label class="btn btn-primary" style="cursor:pointer;margin-top:8px;font-size:13px;padding:10px 20px;">
+📥 選擇 Excel 檔案
+<input type="file" accept=".xlsx" style="display:none" onchange="importExcel(this)">
+</label>
+</div>
+<table id="main-table" style="display:none">
+<thead><tr><th style="width:24px"></th><th>客戶名稱</th><th>防治師</th><th>區域</th><th>類型</th><th>施作日期</th><th>時間</th><th>操作</th></tr></thead>
+<tbody id="main-tbody"></tbody>
+</table>
+</div>
+</div>
+</div>
+
+<div id="tab-dayview" class="tab-content">
+<div class="dv-header">
+<button class="nav-btn" onclick="changeDay(-1)">◀</button>
+<div class="date-display" id="dv-date-display" onclick="openDateJump()" title="點擊快速跳轉日期" style="cursor:pointer;user-select:none;"></div>
+<button class="nav-btn" onclick="changeDay(1)">▶</button>
+<button class="today-btn" onclick="goToday()">今天</button>
+<div class="stat-chip" style="margin-left:6px">案場<span id="dv-job-count">0</span></div>
+<div class="holiday-input-wrap">
+<label>🏖️ 休假（例：Ivan:5/15,5/16 HB:5/20）</label>
+<input type="text" id="holiday-input" placeholder="防治師:月/日,月/日 ..." oninput="saveHolidayInput();renderDayView()">
+</div>
+</div>
+<div class="conflict-bar" id="conflict-bar"></div>
+<div class="dv-grid">
+<div class="dv-sync-scroll" id="dv-scroll">
+<div class="dv-content">
+<div style="display:flex;position:sticky;top:0;z-index:30;">
+<div class="dv-time-spacer">防治師</div>
+<div class="dv-time-header" id="dv-time-header" style="flex:1;"></div>
+</div>
+<div class="dv-rows-wrap">
+<div class="tech-rows-col" id="dv-tech-col"></div>
+<div class="dv-rows" id="dv-rows" style="flex:1;position:relative;"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div id="tab-weekview" class="tab-content">
+<div class="dv-header" id="wv-header" style="gap:6px;flex-wrap:wrap;">
+<div id="wv-week-btns" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
+<div style="margin-left:auto;font-size:11px;color:var(--text3)" id="wv-range-label"></div>
+</div>
+<div style="flex:1;overflow:auto;padding:0;" id="wv-scroll">
+<div id="wv-content" style="min-width:600px;"></div>
+</div>
+</div>
+</div>
+
+<div id="tab-bot" class="tab-content">
+<div class="scrollable">
+<div style="margin-bottom:14px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--text2);line-height:1.8;">
+<span style="color:var(--orange);font-weight:400">🟠 第一批</span>（23-25號發送）：固定日期客戶。
+<span style="color:var(--accent);font-weight:400;margin-left:10px">🔵 第二批</span>（29-31號發送）：例行客戶。
+</div>
+<div class="batch-label batch-1">🟠 第一批｜固定日期客戶 — 23~25號發送</div>
+<table style="margin-bottom:22px"><thead><tr><th>客戶名稱</th><th>防治師</th><th>第一次</th><th>第二次</th><th>第三次</th></tr></thead><tbody id="bot-tbody-1"></tbody></table>
+<div class="batch-label batch-2">🔵 第二批｜例行客戶 — 29~31號發送</div>
+<table><thead><tr><th>客戶名稱</th><th>防治師</th><th>第一次</th><th>第二次</th><th>第三次</th></tr></thead><tbody id="bot-tbody-2"></tbody></table>
+</div>
+</div>
+
+<div id="tab-export" class="tab-content">
+<div class="scrollable">
+<div class="export-section">
+<h3>📊 匯出 Excel（筋斗雲格式）</h3>
+<div style="font-size:11px;color:var(--text2);margin-bottom:10px;line-height:1.7;">產生與原始行程相同格式的 Excel 檔案，可直接上傳筋斗雲。</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;">
+<button class="btn btn-success" onclick="exportExcel('full')" style="font-size:13px;padding:9px 18px;">📥 下載完整行程 Excel</button>
+<button class="btn" onclick="exportExcel('batch1')" style="font-size:13px;padding:9px 18px;background:var(--orange);color:#fff;">🟠 下載第一批（固定客戶）</button>
+<button class="btn btn-primary" onclick="exportExcel('batch2')" style="font-size:13px;padding:9px 18px;">🔵 下載第二批（例行客戶）</button>
+</div>
+</div>
+<div class="export-section"><h3>🟠 第一批機器人清單（固定客戶）預覽</h3>
+<div style="display:flex;gap:7px;margin-bottom:7px"><button class="btn btn-ghost" onclick="copyText('export-bot1')">📋 複製</button><button class="btn btn-ghost" onclick="downloadTSV('export-bot1','機器人第一批')">⬇ 下載 TSV</button></div>
+<textarea class="export-box" id="export-bot1" rows="5" readonly></textarea>
+</div>
+<div class="export-section"><h3>🔵 第二批機器人清單（例行客戶）預覽</h3>
+<div style="display:flex;gap:7px;margin-bottom:7px"><button class="btn btn-ghost" onclick="copyText('export-bot2')">📋 複製</button><button class="btn btn-ghost" onclick="downloadTSV('export-bot2','機器人第二批')">⬇ 下載 TSV</button></div>
+<textarea class="export-box" id="export-bot2" rows="5" readonly></textarea>
+</div>
+<div class="export-section"><h3>完整行程明細文字版</h3>
+<div style="display:flex;gap:7px;margin-bottom:7px"><button class="btn btn-ghost" onclick="copyText('export-full')">📋 複製</button><button class="btn btn-ghost" onclick="downloadTSV('export-full','行程明細')">⬇ 下載 TSV</button></div>
+<textarea class="export-box" id="export-full" rows="6" readonly></textarea>
+</div>
+</div>
+</div>
+
+<div id="tab-workload" class="tab-content">
+<div class="scrollable">
+<div id="workload-content"><div class="import-hint"><div class="icon">📊</div><h2>匯入排班後可查看工作量統計</h2></div></div>
+</div>
+</div>
+
+<div id="tab-clients" class="tab-content">
+<div class="scrollable">
+<div class="import-banner">💡 客戶資料僅供查詢參考；排班日期以每月匯入的 Excel 為準，系統不自動計算。</div>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap;">
+<div style="display:flex;gap:7px;align-items:center;">
+<div class="search-box" style="width:200px;"><span style="color:var(--text3)">🔍</span><input type="text" id="cl-search" placeholder="搜尋客戶..." oninput="renderClientTable()"></div>
+<select id="cl-region" class="form-input" style="width:110px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:6px 9px;outline:none;" onchange="renderClientTable()">
+<option value="all">全部區域</option><option value="北">北部</option><option value="中南">中南部</option>
+</select>
+</div>
+<button class="btn btn-primary" onclick="openClientModal(-1)">＋ 新增客戶</button>
+</div>
+<table><thead><tr><th>客戶名稱</th><th>防治師</th><th>區域</th><th>類型</th><th>地區</th><th>時間</th><th>操作</th></tr></thead><tbody id="client-tbody"></tbody></table>
+</div>
+</div>
+
+<script>
+// ── 客戶資料庫（保留原有，僅供參考/比對用，不再用於生成排班）──
+var clientDB = [{"id":"201CC02205","name":"ABC Cooking Studio_台北101旗艦教室","area":"台北市信義區","region":"北","group":"ABC Cooking Studio","fixed":false,"need_permit":false,"technician":"Joe","start_time":"11:00","duration":45},{"id":"201CC02202","name":"ABC Cooking Studio_南港教室","area":"台北市南港區","region":"北","group":"ABC Cooking Studio","fixed":false,"need_permit":false,"technician":"Ray","start_time":"11:00","duration":30},{"id":"201JR03101","name":"Jiji居酒屋","area":"台北市中山區","region":"北","group":"Jiji","fixed":false,"need_permit":false,"technician":"Joe","start_time":"15:00","duration":45},{"id":"204IR09001","name":"Pasta Labbito","area":"台中市西區","region":"中南","group":"Pasta Labbito","fixed":false,"need_permit":false,"technician":"Daniel","start_time":"14:30","duration":30},{"id":"201SP06101","name":"RELAX33","area":"台北市中山區","region":"北","group":"RELAX33","fixed":false,"need_permit":false,"technician":"Ray, HB","start_time":"11:00","duration":45},{"id":"201FF02306","name":"Subway_板橋新埔店","area":"新北市板橋區","region":"北","group":"Subway","fixed":false,"need_permit":false,"technician":"Joe","start_time":"10:15","duration":30},{"id":"201CR06901","name":"The One","area":"台北市中山區","region":"北","group":"The One","fixed":false,"need_permit":false,"technician":"Errko, Jane","start_time":"10:30","duration":45},{"id":"101FP00102","name":"一之軒新店","area":"新北市新店區","region":"北","group":"一之軒","fixed":false,"need_permit":false,"technician":"Ivan, Jane","start_time":"13:00","duration":60},{"id":"201JR04701","name":"一風堂_中山本店","area":"台北市中山區","region":"北","group":"一風堂","fixed":false,"need_permit":false,"technician":"HB","start_time":"10:00","duration":45},{"id":"203JR04705","name":"一風堂_桃園高鐵店","area":"桃園縣中壢市","region":"北","group":"一風堂","fixed":false,"need_permit":true,"technician":"Joe, Jane","start_time":"08:45","duration":30},{"id":"204JR04803","name":"一蘭_台中店(朝富）","area":"台中市西屯區","region":"中南","group":"一蘭","fixed":false,"need_permit":false,"technician":"Hubert","start_time":"08:00","duration":45},{"id":"201JR04801","name":"一蘭_台北本店","area":"台北市信義區","region":"北","group":"一蘭","fixed":false,"need_permit":false,"technician":"Errko, Jane","start_time":"08:30","duration":30},{"id":"201JR04802","name":"一蘭_台北本店別館","area":"台北市信義區","region":"北","group":"一蘭","fixed":false,"need_permit":false,"technician":"HB","start_time":"08:00","duration":30},{"id":"2010304803","name":"一蘭_商品管理部","area":"台北市信義區","region":"北","group":"一蘭","fixed":false,"need_permit":false,"technician":"Errko, Jane","start_time":"08:00","duration":30},{"id":"204SC07601","name":"人文藝術幼稚園","area":"台中市西屯區","region":"中南","group":"幼稚園","fixed":false,"need_permit":false,"technician":"Hubert","start_time":"07:00","duration":45}];
+
+var schedule=[],excluded=new Set();
+var filters={tech:'all',region:'all',type:'all',status:'all'};
+var popupTarget=null,moveTarget=null;
+var dvDate=new Date();dvDate.setHours(0,0,0,0);
+var TECH_ORDER=['Ivan','HB','Jane','Ray','Daniel','Hubert','Chips','Errko','Tom','George'];
+var TECH_REGION={'Ivan':'北','HB':'北','Jane':'北','Ray':'北','Daniel':'中','Hubert':'中','Chips':'南','Errko':'北','Tom':'北','George':'北'};
+var TECH_GROUP={'Ivan':'主力','HB':'主力','Jane':'主力','Ray':'主力','Daniel':'主力','Hubert':'主力','Chips':'主力','Errko':'備援','Tom':'備援','George':'備援'};
+var TECH_COLORS={'Ivan':{bg:'#f0f4fc',border:'#2563a8',text:'#1a2540'},'HB':{bg:'#f0faf4',border:'#15803d',text:'#1a2540'},'Jane':{bg:'#fef6f0',border:'#c2610a',text:'#1a2540'},'Ray':{bg:'#f4f0fc',border:'#6d28d9',text:'#1a2540'},'Daniel':{bg:'#f0fafe',border:'#0e7490',text:'#1a2540'},'Hubert':{bg:'#fff7ed',border:'#c2610a',text:'#1a2540'},'Chips':{bg:'#fdf0f8',border:'#db2777',text:'#1a2540'},'Errko':{bg:'#f4fce8',border:'#4d7c0f',text:'#1a2540'},'Tom':{bg:'#f0fdf8',border:'#0f766e',text:'#1a2540'},'George':{bg:'#fdf0f8',border:'#9d174d',text:'#1a2540'}};
+var DEF_COLOR={bg:'rgba(150,150,200,.15)',border:'#9696c8',text:'#4b5563'};
+var HOLIDAYS_TW=['2026-01-01','2026-01-28','2026-01-29','2026-01-30','2026-01-31','2026-02-01','2026-02-02','2026-02-28','2026-04-04','2026-04-05','2026-05-01','2026-06-19','2026-09-28','2026-10-10'];
+var WD_FULL=['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+var WDN=['','一','二','三','四','五','六','日'];
+var SEGS=[{s:420,e:720,type:'work'},{s:720,e:780,type:'rest',label:'午休'},{s:780,e:1050,type:'work'},{s:1050,e:1290,type:'rest',label:'下班'},{s:1290,e:1440,type:'work'}];
+var WORK_PX=2,REST_PX=0.3;
+
+function toISO(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function minToStr(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
+function timeToMin(s){if(!s)return 0;var p=s.split(':');return parseInt(p[0])*60+(parseInt(p[1])||0);}
+function getTechColor(tech){var t=(tech||'').split(',')[0].trim();return TECH_COLORS[t]||DEF_COLOR;}
+function fmtShort(ds){var p=ds.split('-');return parseInt(p[1])+'/'+parseInt(p[2]);}
+function fmt(s){if(!s)return'';var d=new Date(s+'T00:00:00');return(d.getMonth()+1)+'/'+d.getDate()+'('+['日','一','二','三','四','五','六'][d.getDay()]+')';}
+function isHolidayTW(s){return HOLIDAYS_TW.indexOf(s)>=0;}
+function minToX(min){var x=0;for(var i=0;i<SEGS.length;i++){var seg=SEGS[i];var px=seg.type==='work'?WORK_PX:REST_PX;if(min<=seg.s)break;if(min>=seg.e)x+=(seg.e-seg.s)*px;else x+=(min-seg.s)*px;}return x;}
+function xToMin(x){// 反推 x 座標對應分鐘，並 snap 到 5 分鐘
+var rem=x;var min=0;
+for(var i=0;i<SEGS.length;i++){var seg=SEGS[i];var px=seg.type==='work'?WORK_PX:REST_PX;var segW=(seg.e-seg.s)*px;if(rem<=segW){min=seg.s+rem/px;break;}rem-=segW;if(i===SEGS.length-1)min=seg.e;}
+min=Math.round(min/5)*5;// snap 5 分鐘
+return Math.max(420,Math.min(1380,min));// 限制 07:00~23:00
+}
+function totalW(){return minToX(1440);}
+
+function saveHolidayInput(){
+var val=document.getElementById('holiday-input').value;
+var month=document.getElementById('target-month').value||'';
+try{localStorage.setItem('holiday_'+month,val);}catch(e){}
+}
+function loadHolidayInput(){
+var month=document.getElementById('target-month').value||'';
+try{var saved=localStorage.getItem('holiday_'+month);document.getElementById('holiday-input').value=saved||'';}catch(e){}
+}
+function parseHolidayInput(){
+var raw=document.getElementById('holiday-input').value.trim();
+var result={};if(!raw)return result;
+var y=dvDate.getFullYear();
+var parts=raw.split(/\s+/);
+for(var i=0;i<parts.length;i++){
+var colon=parts[i].indexOf(':');if(colon<0)continue;
+var tech=parts[i].substring(0,colon).trim();
+var dates=parts[i].substring(colon+1).split(',');
+result[tech]=[];
+for(var j=0;j<dates.length;j++){
+var md=dates[j].trim().match(/^(\d{1,2})\/(\d{1,2})$/);
+if(md){var d=new Date(y,parseInt(md[1])-1,parseInt(md[2]));if(!isNaN(d.getTime()))result[tech].push(toISO(d));}
+}
+}
+return result;
+}
+
+function detectConflicts(){
+var map={};
+for(var si=0;si<schedule.length;si++){
+var row=schedule[si];
+var techs=row.technician.split(',');
+for(var di=0;di<row.dates.length;di++){
+var ds=row.dates[di].dateStr;
+for(var ti=0;ti<techs.length;ti++){
+var t=techs[ti].trim();if(!t)continue;
+var key=t+'|'+ds;
+if(!map[key])map[key]=[];
+map[key].push({s:row.startMin,e:row.startMin+row.duration,si:si,di:di,name:row.name});
+}
+}
+}
+var conflictSet={};
+for(var key in map){
+var jobs=map[key];
+for(var a=0;a<jobs.length;a++){
+for(var b=a+1;b<jobs.length;b++){
+// 同一案場（同 si）：不算衝堂
+if(jobs[a].si===jobs[b].si)continue;
+// 同客戶名稱 + 時間完全相同：Excel 多位防治師分列的同一案場，不算衝堂
+if(jobs[a].name===jobs[b].name&&jobs[a].s===jobs[b].s&&jobs[a].e===jobs[b].e)continue;
+if(jobs[a].s<jobs[b].e&&jobs[b].s<jobs[a].e){
+conflictSet[jobs[a].si+'|'+jobs[a].di]=1;
+conflictSet[jobs[b].si+'|'+jobs[b].di]=1;
+}
+}
+}
+}
+return conflictSet;
+}
+
+function parseDate(raw,y){
+var md=raw.match(/^(\d{1,2})\/(\d{1,2})$/);
+if(md){var d=new Date(y,parseInt(md[1])-1,parseInt(md[2]));if(!isNaN(d.getTime()))return toISO(d);}
+if(/^\d{4}-\d{2}-\d{2}$/.test(raw))return raw;
+return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// 匯入 Excel — 核心邏輯：直接讀取「5月新日期」欄（F欄 / 含「日期」的欄位）
+// ─────────────────────────────────────────────────────────────────────
+function importExcel(input){
+if(!input.files||!input.files[0])return;
+var file=input.files[0];
+var reader=new FileReader();
+reader.onload=function(e){
+try{
+var data=new Uint8Array(e.target.result);
+var wb=XLSX.read(data,{type:'array',cellDates:false});
+var wsName=wb.SheetNames[0];
+var ws=wb.Sheets[wsName];
+var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+if(!rows||rows.length<2){alert('檔案內容為空');return;}
+
+// ── 找欄位索引 ──
+var headerRow=rows[0];
+var colName=-1,colDate=-1,colTime=-1,colDur=-1,colTech=-1;
+var colFixed=-1,colTask=-1,colNeedPermit=-1,colArea=-1,colRegion=-1,colGroup=-1,colWorkOrder=-1;
+
+for(var i=0;i<headerRow.length;i++){
+var h=String(headerRow[i]||'').trim();
+var hl=h.toLowerCase();
+// 客戶名稱
+if(h==='公司客戶名稱'||h==='客戶名稱'||h==='公司名稱')colName=i;
+// 日期：含「日期」字樣的欄
+else if(hl.indexOf('日期')>=0&&colDate<0)colDate=i;
+// 開始時間
+else if(h==='開始時間'||(hl.indexOf('開始')>=0&&hl.indexOf('時間')>=0))colTime=i;
+// 施作時間（分鐘）
+else if(h==='施作時間'||(hl.indexOf('施作')>=0&&hl.indexOf('時間')>=0&&colDur<0))colDur=i;
+// 防治師
+else if(h==='防治師'||hl.indexOf('防治師')>=0)colTech=i;
+// 固定
+else if(h==='固定')colFixed=i;
+// 任務內容
+else if(h==='任務內容'||hl.indexOf('任務')>=0)colTask=i;
+// 需申請
+else if(hl.indexOf('需申請')>=0||hl.indexOf('工單')>=0)colNeedPermit=i;
+// 地區
+else if(h==='地區'||hl.indexOf('地區')>=0)colArea=i;
+// 北中南
+else if(hl.indexOf('北')>=0&&hl.indexOf('中南')>=0)colRegion=i;
+// 群組
+else if(hl.indexOf('群組')>=0)colGroup=i;
+// 工單
+else if(h==='工單')colWorkOrder=i;
+}
+
+if(colName<0)colName=0; // fallback: 第一欄
+if(colDate<0){
+// 最後嘗試：找任何含數字的欄或第一個非名稱欄
+var headerNames=headerRow.map(function(h,i){return{h:String(h||''),i:i};});
+alert('找不到日期欄位。\n\nExcel 第一列欄位為：\n'+headerNames.map(function(x){return x.i+'：'+x.h;}).join('\n')+'\n\n請確認有包含「日期」字樣的欄位。');
+return;
+}
+
+// ── 解析資料列，合併同客戶+同技師 ──
+var clientMap={};
+for(var ri=1;ri<rows.length;ri++){
+var row=rows[ri];
+var name=row[colName];
+if(!name||String(name).trim()==='')continue;
+name=String(name).trim();
+
+// 解析日期 - cellDates:false，序列數直接換算，完全不碰時區
+var dateVal=row[colDate];
+var dateStr='';
+if(dateVal!=null){
+if(typeof dateVal==='number'&&dateVal>40000){
+var serial=Math.floor(dateVal);
+// Excel epoch = 1899-12-30（含1900/2/29 bug補償）
+var d=new Date(Date.UTC(1899,11,30)+serial*86400000);
+dateStr=d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
+} else if(typeof dateVal==='string'&&dateVal.trim()){
+var cleaned=dateVal.trim().replace(/\//g,'-');
+if(/^\d{4}-\d{2}-\d{2}/.test(cleaned))dateStr=cleaned.substring(0,10);
+}
+}
+if(!dateStr)continue;
+
+// 解析時間
+var timeVal=colTime>=0?row[colTime]:null;
+var timeStr='';
+if(timeVal!=null){
+if(typeof timeVal==='number'&&timeVal<1){
+// cellDates:false: 時間為 0~1 的小數
+var totalMin=Math.round(timeVal*24*60);
+timeStr=String(Math.floor(totalMin/60)).padStart(2,'0')+':'+String(totalMin%60).padStart(2,'0');
+} else if(typeof timeVal==='string'&&timeVal.trim()){
+timeStr=timeVal.trim().substring(0,5);
+}
+}
+
+var dur=colDur>=0&&row[colDur]?(parseInt(row[colDur])||30):30;
+var tech=colTech>=0&&row[colTech]?String(row[colTech]).trim():'';
+var area=colArea>=0&&row[colArea]?String(row[colArea]).trim():'';
+var region=colRegion>=0&&row[colRegion]?String(row[colRegion]).trim():'';
+var group=colGroup>=0&&row[colGroup]?String(row[colGroup]).trim():'';
+var fixed=colFixed>=0&&(row[colFixed]==='O'||row[colFixed]==='o'||row[colFixed]===true||row[colFixed]==='TRUE');
+var task=colTask>=0&&row[colTask]?String(row[colTask]).trim():'';
+var needPermit=colNeedPermit>=0&&(row[colNeedPermit]==='O'||row[colNeedPermit]==='o'||row[colNeedPermit]===true);
+var workOrder=colWorkOrder>=0&&row[colWorkOrder]?String(row[colWorkOrder]).trim():'';
+
+// 客戶+技師 為 key（同一客戶可能有多位技師分開紀錄的情況較少，但保留原邏輯）
+var key=name+'||'+tech;
+if(!clientMap[key]){
+clientMap[key]={
+id:ri,name:name,area:area,region:region,group:group,
+fixed:fixed,technician:tech,work_order:workOrder,
+start_time:timeStr,duration:dur,
+need_permit:needPermit,is_restaurant:true,
+dates:[],color:getTechColor(tech)
+};
+}
+// 允許更新 start_time（若第一筆沒有時間但後續有）
+if(!clientMap[key].start_time&&timeStr)clientMap[key].start_time=timeStr;
+clientMap[key].dates.push({dateStr:dateStr,task:task});
+}
+
+// ── 轉成 schedule 陣列 ──
+var newSchedule=[];var idx=0;
+for(var key in clientMap){
+var item=clientMap[key];
+item.id=idx++;
+var tp=(item.start_time||'00:00').split(':');
+item.startMin=parseInt(tp[0])*60+(parseInt(tp[1])||0);
+item.modified=false;
+newSchedule.push(item);
+}
+
+schedule=newSchedule;
+excluded=new Set();
+
+// 從第一筆日期推算月份
+if(newSchedule.length>0&&newSchedule[0].dates.length>0){
+var firstDate=newSchedule[0].dates[0].dateStr;
+var monthVal=firstDate.substring(0,7);
+document.getElementById('target-month').value=monthVal;
+var parts=monthVal.split('-');
+dvDate=new Date(parseInt(parts[0]),parseInt(parts[1])-1,1);
+}
+
+document.getElementById('hint').style.display='none';
+document.getElementById('main-table').style.display='table';
+document.getElementById('save-btn').style.display='inline-flex';
+loadHolidayInput();
+buildTechFilters();renderAll();renderDayView();renderWorkload();
+var colInfo='日期欄：'+headerRow[colDate]+(colTech>=0?'　防治師欄：'+headerRow[colTech]:'')+(colTime>=0?'　時間欄：'+headerRow[colTime]:'');
+alert('✅ 匯入成功！共 '+newSchedule.length+' 筆排班\n（'+colInfo+'）');
+}catch(err){
+alert('匯入失敗：'+err.message);
+console.error(err);
+}
+input.value='';
+};
+reader.readAsArrayBuffer(file);
+}
+
+function saveSchedule(){
+var month=document.getElementById('target-month').value;
+if(!month||!schedule.length)return;
+try{
+var data={schedule:schedule,excluded:Array.from(excluded),month:month,savedAt:new Date().toLocaleString('zh-TW')};
+localStorage.setItem('schedule_'+month,JSON.stringify(data));
+var status=document.getElementById('save-status');
+status.style.display='flex';status.innerHTML='✅ 已儲存 '+data.savedAt;
+setTimeout(function(){status.style.display='none';},3000);
+}catch(err){alert('儲存失敗：'+err.message);}
+}
+// ── Undo Stack ──
+var undoStack=[];
+var MAX_UNDO=30;
+function pushUndo(){
+var snapshot={
+schedule:JSON.parse(JSON.stringify(schedule)),
+excluded:Array.from(excluded)
+};
+undoStack.push(snapshot);
+if(undoStack.length>MAX_UNDO)undoStack.shift();
+document.getElementById('undo-btn').style.display='inline-flex';
+document.getElementById('undo-btn').title='復原上一步（共 '+undoStack.length+' 步）(Ctrl+Z)';
+}
+function undo(){
+if(!undoStack.length){alert('沒有可復原的步驟');return;}
+var snapshot=undoStack.pop();
+schedule=snapshot.schedule;
+excluded=new Set(snapshot.excluded);
+for(var i=0;i<schedule.length;i++)schedule[i].color=getTechColor(schedule[i].technician||'');
+if(!undoStack.length)document.getElementById('undo-btn').style.display='none';
+else document.getElementById('undo-btn').title='復原上一步（共 '+undoStack.length+' 步）(Ctrl+Z)';
+renderAll();renderDayView();renderWorkload();
+var s=document.getElementById('save-status');s.style.display='flex';s.innerHTML='⎌ 已復原';
+setTimeout(function(){s.style.display='none';},2000);
+}
+document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();undo();}});
+
+function autoSave(){
+var month=document.getElementById('target-month').value;
+if(!month||!schedule.length)return;
+try{
+var data={schedule:schedule,excluded:Array.from(excluded),month:month,savedAt:new Date().toLocaleString('zh-TW')};
+localStorage.setItem('schedule_'+month,JSON.stringify(data));
+var s=document.getElementById('save-status');s.style.display='flex';s.innerHTML='✅ 自動儲存 '+data.savedAt;
+setTimeout(function(){s.style.display='none';},2000);
+}catch(e){}
+}
+function loadSavedSchedule(month){
+try{
+var raw=localStorage.getItem('schedule_'+month);
+if(!raw)return false;
+var data=JSON.parse(raw);
+if(!data.schedule||!data.schedule.length)return false;
+schedule=data.schedule;excluded=new Set(data.excluded||[]);
+for(var i=0;i<schedule.length;i++)schedule[i].color=getTechColor(schedule[i].technician||'');
+return data.savedAt;
+}catch(e){return false;}
+}
+
+function getVisible(){
+var q=document.getElementById('search').value.toLowerCase();
+var cs=detectConflicts();
+var seen={};// 去重：同客戶名稱只保留第一筆代表記錄
+return schedule.map(function(r,i){return{row:r,idx:i};}).filter(function(item){
+var r=item.row;
+if(q&&r.name.toLowerCase().indexOf(q)<0&&r.technician.toLowerCase().indexOf(q)<0&&(r.group||'').toLowerCase().indexOf(q)<0)return false;
+// 防治師篩選：要在所有分列中找
+if(filters.tech!=='all'){
+var techMatch=false;
+for(var si2=0;si2<schedule.length;si2++){
+if(schedule[si2].name===r.name&&schedule[si2].technician.split(',').map(function(t){return t.trim();}).indexOf(filters.tech)>=0){techMatch=true;break;}
+}
+if(!techMatch)return false;
+}
+if(filters.region!=='all'&&r.region!==filters.region)return false;
+if(filters.type==='fixed'&&!r.fixed)return false;
+if(filters.type==='normal'&&r.fixed)return false;
+if(filters.status==='included'&&excluded.has(r.name))return false;
+if(filters.status==='excluded'&&!excluded.has(r.name))return false;
+if(filters.status==='conflict'){var hc=false;for(var di=0;di<r.dates.length;di++){if(cs[item.idx+'|'+di])hc=true;}if(!hc)return false;}
+// 同客戶名稱去重（只顯示第一筆）
+if(seen[r.name])return false;
+seen[r.name]=true;
+return true;
+});
+}
+
+function renderMain(){
+var tbody=document.getElementById('main-tbody');
+var rows=getVisible();var cs=detectConflicts();
+var tot=Object.keys(cs).length;
+var chip=document.getElementById('s-conflict-chip');
+document.getElementById('s-conflict').textContent=tot;chip.style.display=tot>0?'':'none';
+if(!rows.length){tbody.innerHTML='<tr><td colspan="8"><div class="empty">沒有符合的資料</div></td></tr>';return;}
+// 用 DocumentFragment 建立 DOM，避免 innerHTML onclick 的所有問題
+var frag=document.createDocumentFragment();
+for(var ri=0;ri<rows.length;ri++){
+var row=rows[ri].row;var idx=rows[ri].idx;
+var isExcl=excluded.has(row.name);
+var tr=document.createElement('tr');
+tr.className=(isExcl?'excluded ':'')+' '+(row.modified?'modified ':'')+' '+(false?'conflict-row':'');
+var rhc=false;for(var di=0;di<row.dates.length;di++){if(cs[idx+'|'+di])rhc=true;}
+if(rhc)tr.className+=' conflict-row';
+
+// 勾選欄
+var tdCb=document.createElement('td');tdCb.style.padding='0 7px';
+var cb=document.createElement('input');cb.type='checkbox';cb.checked=!isExcl;
+cb.style.cssText='cursor:pointer;accent-color:var(--accent);width:13px;height:13px;';
+(function(n){cb.addEventListener('change',function(){toggleExclude(n);});})(row.name);
+tdCb.appendChild(cb);tr.appendChild(tdCb);
+
+// 客戶名稱欄
+var tdName=document.createElement('td');
+tdName.innerHTML='<div class="client-name" title="'+row.name+'">'+row.name+'</div><div class="client-group">'+(row.group||'')+'</div>';
+tr.appendChild(tdName);
+
+// 防治師欄（下拉多選按鈕）— 合併同案場所有分列的防治師名稱
+var tdTech=document.createElement('td');
+var techBtn=document.createElement('button');
+techBtn.className='tech-tag-btn';
+// 找同名客戶所有分列的防治師合併顯示
+var allTechNames=[];
+var refDs=row.dates[0]?row.dates[0].dateStr:null;
+var refS=row.startMin;var refE=row.startMin+row.duration;
+for(var si2=0;si2<schedule.length;si2++){
+var sr2=schedule[si2];if(sr2.name!==row.name)continue;
+var match=false;
+for(var dd2=0;dd2<sr2.dates.length;dd2++){
+if(refDs&&sr2.dates[dd2].dateStr===refDs&&sr2.startMin===refS&&(sr2.startMin+sr2.duration)===refE){match=true;break;}
+}
+if(!refDs||match){
+sr2.technician.split(',').forEach(function(t){var tt=t.trim();if(tt&&allTechNames.indexOf(tt)<0)allTechNames.push(tt);});
+}
+}
+techBtn.textContent=(allTechNames.length?allTechNames.join(', '):row.technician)+' ▾';
+(function(i,btn){techBtn.addEventListener('click',function(e){e.stopPropagation();openTechDropdown(i,btn);});})(idx,techBtn);
+tdTech.appendChild(techBtn);tr.appendChild(tdTech);
+
+// 區域欄
+var tdReg=document.createElement('td');
+tdReg.innerHTML=row.region==='北'?'<span class="badge badge-north">北</span>':row.region==='中南'?'<span class="badge badge-south">中南</span>':'<span style="font-size:10px;color:var(--text3)">'+(row.region||'—')+'</span>';
+tr.appendChild(tdReg);
+
+// 類型欄
+var tdType=document.createElement('td');
+tdType.innerHTML=row.fixed?'<span class="badge badge-fixed">固定</span>':'<span class="badge badge-normal">例行</span>';
+tr.appendChild(tdType);
+
+// 日期欄
+var tdDate=document.createElement('td');tdDate.style.fontSize='11px';
+for(var di=0;di<row.dates.length;di++){
+var d=row.dates[di];var ic=!!cs[idx+'|'+di];
+var entry=document.createElement('div');entry.className='date-entry';
+var taskLbl=document.createElement('span');taskLbl.className='task-label';taskLbl.textContent=d.task;
+var pill=document.createElement('span');pill.className='date-pill'+(ic?' conflict':'');pill.textContent=fmt(d.dateStr);
+(function(i,j,p){pill.addEventListener('click',function(){openDatePopup(i,j,p);});})(idx,di,pill);
+entry.appendChild(taskLbl);entry.appendChild(pill);
+if(isHolidayTW(d.dateStr)){var ht=document.createElement('span');ht.className='holiday-tag';ht.textContent='⚠️假日';entry.appendChild(ht);}
+if(ic){var wi=document.createElement('span');wi.style.cssText='color:var(--red);font-size:9px';wi.textContent='⚠️';entry.appendChild(wi);}
+tdDate.appendChild(entry);
+}
+tr.appendChild(tdDate);
+
+// 時間欄
+var tdTime=document.createElement('td');tdTime.style.cssText='font-family:DM Mono,monospace;font-size:11px;color:var(--text2)';
+tdTime.textContent=row.start_time||'';tr.appendChild(tdTime);
+
+// 操作欄
+var tdOp=document.createElement('td');
+var exclBtn=document.createElement('button');exclBtn.className='excl-btn';exclBtn.textContent=isExcl?'↩':'✕';
+(function(n){exclBtn.addEventListener('click',function(){toggleExclude(n);});})(row.name);
+tdOp.appendChild(exclBtn);tr.appendChild(tdOp);
+
+if(rhc)tr.querySelector('td').style.borderLeft='2px solid var(--red)';
+frag.appendChild(tr);
+}
+tbody.innerHTML='';tbody.appendChild(frag);
+}
+
+function openDatePopup(idx,di,el){
+popupTarget={idx:idx,di:di};
+var row=schedule[idx];var d=row.dates[di];
+document.getElementById('popup-title').textContent=row.name+' — '+d.task;
+document.getElementById('popup-date-input').value=fmtShort(d.dateStr);
+document.getElementById('popup-time-input').value=row.start_time||'';
+var ov=document.getElementById('popup-overlay');var popup=document.getElementById('date-popup');
+ov.style.display='block';popup.style.display='block';
+var rect=el.getBoundingClientRect();
+var top=rect.bottom+4;var left=rect.left;
+if(left+220>window.innerWidth)left=window.innerWidth-225;
+if(top+200>window.innerHeight)top=rect.top-205;
+popup.style.top=top+'px';popup.style.left=left+'px';
+setTimeout(function(){document.getElementById('popup-date-input').select();},40);
+}
+function confirmDateEdit(){
+if(!popupTarget)return;
+var raw=document.getElementById('popup-date-input').value.trim();
+var row=schedule[popupTarget.idx];
+var y=parseInt(document.getElementById('target-month').value.split('-')[0]);
+var nd=parseDate(raw,y);
+if(nd){
+// 同步同案場所有分列的日期
+var oldDs=row.dates[popupTarget.di].dateStr;
+var oldS=row.startMin;var oldE=row.startMin+row.duration;
+var newTime=document.getElementById('popup-time-input').value.trim();
+var newStartMin=row.startMin;
+if(newTime&&/\d{1,2}:\d{2}/.test(newTime)){var tp2=newTime.split(':');newStartMin=parseInt(tp2[0])*60+(parseInt(tp2[1])||0);}
+for(var i=0;i<schedule.length;i++){
+var r=schedule[i];if(r.name!==row.name)continue;
+for(var d2=0;d2<r.dates.length;d2++){
+if(r.dates[d2].dateStr===oldDs&&r.startMin===oldS&&(r.startMin+r.duration)===oldE){
+r.dates[d2].dateStr=nd;
+if(newTime&&/\d{1,2}:\d{2}/.test(newTime)){r.start_time=newTime;r.startMin=newStartMin;}
+r.modified=true;
+}
+}
+}
+renderAll();renderDayView();pushUndo();autoSave();
+}else alert('格式錯誤，請輸入如 5/15');
+closePopup();
+}
+function closePopup(){document.getElementById('date-popup').style.display='none';document.getElementById('popup-overlay').style.display='none';popupTarget=null;}
+document.getElementById('popup-date-input').addEventListener('keydown',function(e){if(e.key==='Enter')confirmDateEdit();if(e.key==='Escape')closePopup();});
+document.getElementById('popup-time-input').addEventListener('keydown',function(e){if(e.key==='Enter')confirmDateEdit();if(e.key==='Escape')closePopup();});
+
+function renderDayView(){
+var ds=toISO(dvDate);var dow=dvDate.getDay();
+var isHol=HOLIDAYS_TW.indexOf(ds)>=0||dow===0||dow===6;
+var dateEl=document.getElementById('dv-date-display');
+dateEl.textContent=(dvDate.getMonth()+1)+'/'+dvDate.getDate()+' '+WD_FULL[dow];
+dateEl.style.color=isHol?'var(--red)':'var(--text)';
+var holidayMap=parseHolidayInput();
+var cs=detectConflicts();
+var todayJobs=[];
+for(var si=0;si<schedule.length;si++){
+var row=schedule[si];
+for(var di=0;di<row.dates.length;di++){
+if(row.dates[di].dateStr===ds){
+var jWd=new Date(row.dates[di].dateStr+'T00:00:00').getDay();
+todayJobs.push({si:si,di:di,clientName:row.name,group:row.group,technician:row.technician,startMin:row.startMin,duration:row.duration,task:row.dates[di].task,color:row.color,isConflict:!!cs[si+'|'+di],isWeekend:jWd===0||jWd===6,isFixed:!!row.fixed});
+}
+}
+}
+document.getElementById('dv-job-count').textContent=todayJobs.length;
+var cb=document.getElementById('conflict-bar');
+var cj=todayJobs.filter(function(j){return j.isConflict;});
+if(cj.length>0){var cn=[];cj.forEach(function(j){if(cn.indexOf(j.clientName)<0)cn.push(j.clientName);});cb.innerHTML='⚠️ <strong>衝堂：</strong>'+cn.join('、');cb.classList.add('show');}
+else cb.classList.remove('show');
+
+// 顯示全部防治師（固定順序），無排班者顯示空列
+var techList=TECH_ORDER.slice();
+
+var techColEl=document.getElementById('dv-tech-col');
+var labelsHTML='';
+for(var ti=0;ti<techList.length;ti++){
+var tn=techList[ti];var tc=TECH_COLORS[tn]||DEF_COLOR;
+var onHol=holidayMap[tn]&&holidayMap[tn].indexOf(ds)>=0;
+var hasConf=todayJobs.filter(function(j){return j.technician.split(',').map(function(t){return t.trim();}).indexOf(tn)>=0&&j.isConflict;}).length>0;
+var badge=onHol?'<span class="holiday-badge-tech">休</span>':hasConf?'<span class="conflict-badge">衝</span>':'';
+labelsHTML+='<div class="tech-row-label-dv" style="color:'+(onHol?'var(--text3)':tc.text)+';'+(onHol?'opacity:.4;':'')+'">'+tn+badge+'</div>';
+}
+techColEl.innerHTML=labelsHTML;
+
+var tw=totalW();
+var thEl=document.getElementById('dv-time-header');
+thEl.style.width=tw+'px';thEl.style.minWidth=tw+'px';thEl.style.position='relative';
+var hHTML='';
+for(var hour=7;hour<=24;hour++){hHTML+='<div class="time-mark-dv hour" style="left:'+minToX(hour*60)+'px">'+String(hour%24).padStart(2,'0')+':00</div>';}
+thEl.innerHTML=hHTML;
+
+var rowsEl=document.getElementById('dv-rows');
+rowsEl.innerHTML='';rowsEl.style.position='relative';
+if(!techList.length){rowsEl.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);flex-direction:column;gap:8px"><div style="font-size:40px;opacity:.3">📭</div><div>今日無排班</div></div>';return;}
+
+for(var ti=0;ti<techList.length;ti++){
+(function(tn,ti2){
+var tj=todayJobs.filter(function(j){return j.technician.split(',').map(function(t){return t.trim();}).indexOf(tn)>=0;});
+var onHol=holidayMap[tn]&&holidayMap[tn].indexOf(ds)>=0;
+var hc=tj.filter(function(j){return j.isConflict;}).length>0;
+
+var rowDiv=document.createElement('div');
+rowDiv.className='dv-row'+(hc?' has-conflict':'');
+rowDiv.style.width=tw+'px';
+rowDiv.dataset.tech=tn;rowDiv.dataset.tiIdx=ti2;
+
+if(onHol){
+var holDiv=document.createElement('div');
+holDiv.style.cssText='position:absolute;inset:0;background:rgba(194,97,10,.07);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--orange);z-index:5;pointer-events:none;';
+holDiv.textContent='🏖️ 休假';rowDiv.appendChild(holDiv);
+}
+
+// 休息段背景 + 格線
+for(var si2=0;si2<SEGS.length;si2++){var seg=SEGS[si2];if(seg.type==='rest'){var rb2=document.createElement('div');rb2.className='seg-rest-bg';rb2.style.left=minToX(seg.s)+'px';rb2.style.width=(minToX(seg.e)-minToX(seg.s))+'px';rowDiv.appendChild(rb2);}}
+for(var hour=7;hour<=24;hour++){var vl=document.createElement('div');vl.className='vline-h';vl.style.left=minToX(hour*60)+'px';rowDiv.appendChild(vl);if(hour*60+30<1440){var vl2=document.createElement('div');vl2.className='vline-hf';vl2.style.left=minToX(hour*60+30)+'px';rowDiv.appendChild(vl2);}}
+
+// 拖曳 drop zone 事件
+rowDiv.addEventListener('dragover',function(e){
+e.preventDefault();e.dataTransfer.dropEffect='move';
+document.querySelectorAll('.dv-row.drag-over').forEach(function(r){r.classList.remove('drag-over');});
+this.classList.add('drag-over');
+// 時間提示線
+document.querySelectorAll('.drop-time-hint,.drop-time-label').forEach(function(el){el.remove();});
+var scrollEl=document.getElementById('dv-scroll');
+var rowRect=this.getBoundingClientRect();
+var rawX=e.clientX-rowRect.left+scrollEl.scrollLeft-(window.dvDragOffsetX||0);
+var snapMin=xToMin(rawX);
+var hintLine=document.createElement('div');hintLine.className='drop-time-hint';hintLine.style.left=minToX(snapMin)+'px';
+var hintLbl=document.createElement('div');hintLbl.className='drop-time-label';hintLbl.style.left=(minToX(snapMin)+4)+'px';hintLbl.textContent=minToStr(snapMin);
+this.appendChild(hintLine);this.appendChild(hintLbl);
+});
+rowDiv.addEventListener('dragleave',function(e){
+if(!this.contains(e.relatedTarget)){this.classList.remove('drag-over');document.querySelectorAll('.drop-time-hint,.drop-time-label').forEach(function(el){el.remove();});}
+});
+rowDiv.addEventListener('drop',function(e){
+e.preventDefault();
+this.classList.remove('drag-over');
+document.querySelectorAll('.drop-time-hint,.drop-time-label').forEach(function(el){el.remove();});
+var dsi=parseInt(e.dataTransfer.getData('si'));
+var ddi=parseInt(e.dataTransfer.getData('di'));
+var dragOffX=parseFloat(e.dataTransfer.getData('offsetX')||0);
+if(isNaN(dsi)||isNaN(ddi))return;
+var scrollEl=document.getElementById('dv-scroll');
+var rowRect=this.getBoundingClientRect();
+var rawX=e.clientX-rowRect.left+scrollEl.scrollLeft-dragOffX;
+var newStartMin=xToMin(rawX);
+var newTech=this.dataset.tech;
+var row=schedule[dsi];
+var oldDs=row.dates[ddi].dateStr;var oldS=row.startMin;var oldE=row.startMin+row.duration;
+// 同步所有同案場分列
+for(var i=0;i<schedule.length;i++){
+var r=schedule[i];if(r.name!==row.name)continue;
+for(var d2=0;d2<r.dates.length;d2++){
+if(r.dates[d2].dateStr===oldDs&&r.startMin===oldS&&(r.startMin+r.duration)===oldE){
+r.dates[d2].dateStr=ds;
+r.start_time=minToStr(newStartMin);r.startMin=newStartMin;
+r.technician=newTech;r.color=getTechColor(newTech);r.modified=true;
+}
+}
+}
+renderAll();renderDayView();renderWorkload();pushUndo();autoSave();
+});
+
+// 案場 job
+var placed=[];
+for(var ji=0;ji<tj.length;ji++){
+(function(job){
+var jx=minToX(job.startMin);var jxEnd=minToX(job.startMin+job.duration);
+var fullW=Math.max(jxEnd-jx,40);
+var overlapGroup=[job];
+for(var jj=0;jj<tj.length;jj++){var other=tj[jj];if(other===job)continue;if(job.startMin<other.startMin+other.duration&&other.startMin<job.startMin+job.duration)overlapGroup.push(other);}
+var col=0;
+var alreadyPlaced=placed.some(function(p){return p.job===job;});
+if(!alreadyPlaced){
+var takenCols=[];for(var pp=0;pp<placed.length;pp++){for(var og=0;og<overlapGroup.length;og++){if(placed[pp].job===overlapGroup[og])takenCols.push(placed[pp].col);}}
+while(takenCols.indexOf(col)>=0)col++;placed.push({job:job,col:col});
+}else{for(var pp=0;pp<placed.length;pp++){if(placed[pp].job===job){col=placed[pp].col;break;}}}
+var totalCols=overlapGroup.length;var colW=fullW/totalCols;var jw=Math.max(colW-2,20);
+var jxFinal=jx+col*colW;var tc=job.color;
+
+var jobDiv=document.createElement('div');
+jobDiv.className='dv-job'+(job.isConflict?' is-conflict':'');
+jobDiv.style.left=jxFinal+'px';jobDiv.style.width=jw+'px';
+jobDiv.style.background=job.isConflict?'rgba(200,30,58,.1)':tc.bg;
+jobDiv.style.borderColor=job.isConflict?'var(--red)':tc.border;
+if(job.isFixed)jobDiv.style.cursor='default';
+jobDiv.setAttribute('draggable','true');
+jobDiv.title=job.clientName+(job.isFixed?'（固定日期）':'');
+
+var nameDiv=document.createElement('div');nameDiv.className='dv-job-name';
+nameDiv.style.color=job.isConflict?'#9f1239':tc.text;
+nameDiv.textContent=(job.isFixed?'🔒 ':'')+job.clientName;
+var timeDiv=document.createElement('div');timeDiv.className='dv-job-time';
+timeDiv.style.color=job.isConflict?'var(--red)':tc.border;
+timeDiv.textContent=minToStr(job.startMin)+'–'+minToStr(job.startMin+job.duration);
+jobDiv.appendChild(nameDiv);jobDiv.appendChild(timeDiv);
+if(job.isConflict){var ci=document.createElement('div');ci.className='conflict-indicator';ci.textContent='⚠️ 衝堂';jobDiv.appendChild(ci);}
+
+// 拖曳開始
+jobDiv.addEventListener('dragstart',function(e){
+var rect=this.getBoundingClientRect();
+var offsetX=e.clientX-rect.left;
+window.dvDragOffsetX=offsetX;
+e.dataTransfer.setData('si',String(job.si));
+e.dataTransfer.setData('di',String(job.di));
+e.dataTransfer.setData('offsetX',String(offsetX));
+e.dataTransfer.effectAllowed='move';
+var ghost=document.createElement('div');
+ghost.className='drag-ghost';
+ghost.style.background=tc.bg;ghost.style.borderLeft='3px solid '+tc.border;
+ghost.style.color=tc.text;ghost.textContent=job.clientName;
+ghost.style.top='-999px';document.body.appendChild(ghost);
+e.dataTransfer.setDragImage(ghost,offsetX,20);
+setTimeout(function(){ghost.remove();this.classList.add('dragging');}.bind(this),0);
+});
+jobDiv.addEventListener('dragend',function(){this.classList.remove('dragging');document.querySelectorAll('.dv-row.drag-over').forEach(function(r){r.classList.remove('drag-over');});document.querySelectorAll('.drop-time-hint,.drop-time-label').forEach(function(el){el.remove();});});
+
+// 點擊（非拖曳）
+jobDiv.addEventListener('click',function(e){
+if(job.isFixed)onDvFixedJobClick(e,job.si,job.di);
+else onDvJobClick(e,job.si,job.di);
+});
+
+rowDiv.appendChild(jobDiv);
+})(tj[ji]);
+}
+rowsEl.appendChild(rowDiv);
+})(techList[ti],ti);
+}
+
+// 現在線
+var nowD=new Date();
+if(toISO(nowD)===ds){var nx=minToX(nowD.getHours()*60+nowD.getMinutes());var nl=document.createElement('div');nl.className='now-line-dv';nl.style.cssText='left:'+nx+'px;position:absolute;top:0;bottom:0;';rowsEl.appendChild(nl);}
+}
+
+function changeDay(d){dvDate.setDate(dvDate.getDate()+d);renderDayView();}
+function goToday(){dvDate=new Date();dvDate.setHours(0,0,0,0);renderDayView();}
+
+function openDateJump(){
+var popup=document.getElementById('date-jump-popup');
+var dateEl=document.getElementById('dv-date-display');
+var iso=toISO(dvDate);
+document.getElementById('jump-date-input').value=iso;
+document.getElementById('jump-month-input').value=iso.substring(0,7);
+popup.style.display='block';
+var rect=dateEl.getBoundingClientRect();
+var top=rect.bottom+6;var left=rect.left;
+if(left+210>window.innerWidth)left=window.innerWidth-215;
+if(top+180>window.innerHeight)top=rect.top-185;
+popup.style.top=top+'px';popup.style.left=left+'px';
+document.getElementById('jump-month-input').onchange=function(){
+var m=this.value;if(!m)return;
+document.getElementById('jump-date-input').value=m+'-01';
+};
+}
+function closeDateJump(){document.getElementById('date-jump-popup').style.display='none';}
+function confirmDateJump(){
+var dateVal=document.getElementById('jump-date-input').value;
+if(dateVal){dvDate=new Date(dateVal+'T00:00:00');renderDayView();}
+closeDateJump();
+}
+document.addEventListener('click',function(e){
+var p=document.getElementById('date-jump-popup');
+if(p&&p.style.display==='block'&&!p.contains(e.target)&&e.target.id!=='dv-date-display')closeDateJump();
+});
+document.getElementById('jump-date-input').addEventListener('keydown',function(e){if(e.key==='Enter')confirmDateJump();if(e.key==='Escape')closeDateJump();});
+
+// ── 排班明細防治師下拉多選 ──
+var techDropdownTarget=null;
+function openTechDropdown(idx,el){
+techDropdownTarget=idx;
+var row=schedule[idx];
+// 收集同案場所有分列的防治師（找第一筆 date 的兄弟）
+var currentTechs=[];
+var ds=row.dates[0]?row.dates[0].dateStr:null;
+if(ds){
+var s=row.startMin;var e2=row.startMin+row.duration;
+for(var i=0;i<schedule.length;i++){
+var r=schedule[i];if(r.name!==row.name)continue;
+for(var d2=0;d2<r.dates.length;d2++){
+if(r.dates[d2].dateStr===ds&&r.startMin===s&&(r.startMin+r.duration)===e2){
+r.technician.split(',').forEach(function(t){var tt=t.trim();if(tt&&currentTechs.indexOf(tt)<0)currentTechs.push(tt);});
+}
+}
+}
+}
+if(!currentTechs.length)currentTechs=row.technician.split(',').map(function(t){return t.trim();}).filter(Boolean);
+
+// 建立 checkbox 清單
+var techSet={};for(var i=0;i<schedule.length;i++){var ts=schedule[i].technician.split(',');for(var j=0;j<ts.length;j++){var t=ts[j].trim();if(t)techSet[t]=1;}}
+var allTechs=TECH_ORDER.filter(function(t){return techSet[t];});
+Object.keys(techSet).forEach(function(t){if(allTechs.indexOf(t)<0)allTechs.push(t);});
+var list=document.getElementById('td-list');list.innerHTML='';
+for(var ti=0;ti<allTechs.length;ti++){
+var tn=allTechs[ti];var tc=TECH_COLORS[tn]||DEF_COLOR;
+var label=document.createElement('label');
+var isSel=currentTechs.indexOf(tn)>=0;
+label.className='move-tech-cb'+(isSel?' selected':'');
+if(isSel){label.style.borderColor=tc.border;label.style.background=tc.bg;label.style.color=tc.text;}
+label.innerHTML='<input type="checkbox" value="'+tn+'"'+(isSel?' checked':'')+'>'+tn;
+label.querySelector('input').addEventListener('change',function(){
+var lbl=this.parentElement;var isChecked=this.checked;var val=this.value;var tc2=TECH_COLORS[val]||DEF_COLOR;
+lbl.classList.toggle('selected',isChecked);
+lbl.style.borderColor=isChecked?tc2.border:'';lbl.style.background=isChecked?tc2.bg:'';lbl.style.color=isChecked?tc2.text:'';
+});
+list.appendChild(label);
+}
+var dd=document.getElementById('tech-dropdown');dd.style.display='block';
+var rect=el.getBoundingClientRect();
+var top=rect.bottom+4;var left=rect.left;
+if(left+200>window.innerWidth)left=window.innerWidth-205;
+if(top+180>window.innerHeight)top=rect.top-185;
+dd.style.top=top+'px';dd.style.left=left+'px';
+}
+function closeTechDropdown(){document.getElementById('tech-dropdown').style.display='none';techDropdownTarget=null;}
+function confirmTechEdit(){
+if(techDropdownTarget===null)return;
+var checks=document.querySelectorAll('#td-list input[type=checkbox]:checked');
+var newTechs=[];checks.forEach(function(c){newTechs.push(c.value);});
+if(!newTechs.length){alert('請至少選擇一位防治師');return;}
+var row=schedule[techDropdownTarget];
+// 找出所有日期的兄弟分列，按日期群組各自處理
+var name2=row.name;
+// 收集該客戶所有分列
+var allSiblings={};// key: dateStr+'|'+startMin+'|'+endMin -> [{si,di}]
+for(var i=0;i<schedule.length;i++){
+var r=schedule[i];if(r.name!==name2)continue;
+for(var d2=0;d2<r.dates.length;d2++){
+var key=r.dates[d2].dateStr+'|'+r.startMin+'|'+(r.startMin+r.duration);
+if(!allSiblings[key])allSiblings[key]=[];
+allSiblings[key].push({si:i,di:d2});
+}
+}
+// 對每個日期群組，重建防治師分列
+var toRemoveSi=[];
+var toAdd=[];
+for(var key in allSiblings){
+var group=allSiblings[key];
+var parts=key.split('|');
+var ds2=parts[0];var sMin=parseInt(parts[1]);var eMin=parseInt(parts[2]);
+var dur=eMin-sMin;
+var rep=group[0];var repRow=schedule[rep.si];
+var task=repRow.dates[rep.di].task;
+// 更新現有分列
+for(var gi=0;gi<group.length&&gi<newTechs.length;gi++){
+var sr=schedule[group[gi].si];
+sr.technician=newTechs[gi];sr.color=getTechColor(newTechs[gi]);sr.modified=true;
+}
+// 新增不足
+for(var ni=group.length;ni<newTechs.length;ni++){
+toAdd.push({name:name2,area:repRow.area,region:repRow.region,group:repRow.group,
+fixed:repRow.fixed,technician:newTechs[ni],work_order:repRow.work_order||'',
+start_time:repRow.start_time,duration:dur,startMin:sMin,
+need_permit:repRow.need_permit,is_restaurant:true,modified:true,
+dates:[{dateStr:ds2,task:task}],color:getTechColor(newTechs[ni])});
+}
+// 標記多餘的待刪除
+for(var ri2=newTechs.length;ri2<group.length;ri2++)toRemoveSi.push(group[ri2].si);
+}
+// 刪除多餘（從後往前）
+toRemoveSi.sort(function(a,b){return b-a;});
+toRemoveSi.forEach(function(idx){schedule.splice(idx,1);});
+// 新增
+toAdd.forEach(function(nr){nr.id=schedule.length;schedule.push(nr);});
+closeTechDropdown();renderAll();renderDayView();renderWorkload();pushUndo();autoSave();
+}
+document.addEventListener('click',function(e){
+var dd=document.getElementById('tech-dropdown');
+if(dd&&dd.style.display==='block'&&!dd.contains(e.target))closeTechDropdown();
+});
+function buildMoveTechList(selectedTechs){
+// selectedTechs: array of tech names currently selected
+var techSet={};
+for(var i=0;i<schedule.length;i++){var ts=schedule[i].technician.split(',');for(var j=0;j<ts.length;j++){var t=ts[j].trim();if(t)techSet[t]=1;}}
+var techs=TECH_ORDER.filter(function(t){return techSet[t];});
+Object.keys(techSet).forEach(function(t){if(techs.indexOf(t)<0)techs.push(t);});
+var list=document.getElementById('move-tech-list');list.innerHTML='';
+for(var ti=0;ti<techs.length;ti++){
+var tn=techs[ti];var tc=TECH_COLORS[tn]||DEF_COLOR;
+var label=document.createElement('label');
+label.className='move-tech-cb'+(selectedTechs.indexOf(tn)>=0?' selected':'');
+label.style.borderColor=selectedTechs.indexOf(tn)>=0?tc.border:null;
+label.style.background=selectedTechs.indexOf(tn)>=0?tc.bg:null;
+label.style.color=selectedTechs.indexOf(tn)>=0?tc.text:null;
+label.innerHTML='<input type="checkbox" value="'+tn+'"'+(selectedTechs.indexOf(tn)>=0?' checked':'')+'>'+tn;
+label.querySelector('input').addEventListener('change',function(){
+var lbl=this.parentElement;
+var isChecked=this.checked;var val=this.value;var tc2=TECH_COLORS[val]||DEF_COLOR;
+lbl.classList.toggle('selected',isChecked);
+lbl.style.borderColor=isChecked?tc2.border:'';
+lbl.style.background=isChecked?tc2.bg:'';
+lbl.style.color=isChecked?tc2.text:'';
+});
+list.appendChild(label);
+}
+}
+function getMoveTechSelected(){
+var checks=document.querySelectorAll('#move-tech-list input[type=checkbox]:checked');
+var result=[];checks.forEach(function(c){result.push(c.value);});return result;
+}
+
+function onDvFixedJobClick(e,si,di){
+e.stopPropagation();
+var row=schedule[si];moveTarget={si:si,di:di};
+var ds=row.dates[di].dateStr;
+document.getElementById('move-name').textContent='🔒 '+row.name+' — '+row.dates[di].task+'（固定日期，時間與防治師可調整）';
+document.getElementById('move-date').value=fmtShort(ds);
+document.getElementById('move-time').value=row.start_time||'';
+var dateInp=document.getElementById('move-date');var timeInp=document.getElementById('move-time');
+dateInp.readOnly=true;dateInp.style.opacity='0.4';dateInp.style.cursor='not-allowed';
+timeInp.readOnly=false;timeInp.style.opacity='1';timeInp.style.cursor='';
+var allTechs=getSiblingTechs(si,di);
+buildMoveTechList(allTechs);
+document.getElementById('conflict-warn').style.display='none';
+document.getElementById('available-techs-section').style.display='none';
+var popup=document.getElementById('move-popup');popup.style.display='block';
+popup.style.left=Math.min(e.clientX,window.innerWidth-290)+'px';popup.style.top=Math.min(e.clientY+8,window.innerHeight-280)+'px';
+}
+
+function onDvJobClick(e,si,di){
+e.stopPropagation();
+var row=schedule[si];moveTarget={si:si,di:di};
+var ds=row.dates[di].dateStr;
+document.getElementById('move-name').textContent=row.name+' — '+row.dates[di].task;
+document.getElementById('move-date').value=fmtShort(ds);
+document.getElementById('move-time').value=row.start_time||'';
+var dateInp=document.getElementById('move-date');var timeInp=document.getElementById('move-time');
+dateInp.readOnly=false;dateInp.style.opacity='1';dateInp.style.cursor='';
+timeInp.readOnly=false;timeInp.style.opacity='1';timeInp.style.cursor='';
+// 找出同一案場所有分列記錄的防治師
+var allTechs=getSiblingTechs(si,di);
+buildMoveTechList(allTechs);
+var cs=detectConflicts();var isConflict=!!cs[si+'|'+di];
+var cw=document.getElementById('conflict-warn');
+if(isConflict){cw.style.display='block';cw.textContent='⚠️ 此案場與同防治師其他案場時間重疊！';}else cw.style.display='none';
+document.getElementById('available-techs-section').style.display='none';
+var popup=document.getElementById('move-popup');popup.style.display='block';
+popup.style.left=Math.min(e.clientX,window.innerWidth-290)+'px';popup.style.top=Math.min(e.clientY+8,window.innerHeight-280)+'px';
+}
+
+// 找出同一案場的所有分列防治師（同名稱 + 同日期 + 同時間視為同一案場）
+function getSiblingTechs(si,di){
+var row=schedule[si];
+var ds=row.dates[di].dateStr;
+var s=row.startMin;var e2=row.startMin+row.duration;
+var techs=[];
+for(var i=0;i<schedule.length;i++){
+var r=schedule[i];
+if(r.name!==row.name)continue;
+for(var d2=0;d2<r.dates.length;d2++){
+if(r.dates[d2].dateStr!==ds)continue;
+if(r.startMin===s&&(r.startMin+r.duration)===e2){
+// 同一案場分列記錄
+r.technician.split(',').forEach(function(t){var tt=t.trim();if(tt&&techs.indexOf(tt)<0)techs.push(tt);});
+}
+}
+}
+if(!techs.length)techs=row.technician.split(',').map(function(t){return t.trim();}).filter(Boolean);
+return techs;
+}
+
+function closeMovePopup(){document.getElementById('move-popup').style.display='none';moveTarget=null;}
+
+function confirmMove(){
+if(!moveTarget)return;
+var newTechs=getMoveTechSelected();
+if(!newTechs.length){alert('請至少選擇一位防治師');return;}
+var row=schedule[moveTarget.si];
+var isFixed=document.getElementById('move-date').readOnly;
+var nd=row.dates[moveTarget.di].dateStr;
+var newTime=row.start_time;
+if(!isFixed){
+var raw=document.getElementById('move-date').value.trim();
+var y=dvDate.getFullYear();nd=parseDate(raw,y);
+if(!nd){alert('日期格式錯誤，請輸入如 5/15');return;}
+}
+// 時間：固定和非固定都可更新
+var timeInput=document.getElementById('move-time').value.trim();
+if(timeInput&&/\d{1,2}:\d{2}/.test(timeInput))newTime=timeInput;
+var newTimeStr=newTime;
+var newStartMin=row.startMin;
+if(newTimeStr&&/\d{1,2}:\d{2}/.test(newTimeStr)){var tp2=newTimeStr.split(':');newStartMin=parseInt(tp2[0])*60+(parseInt(tp2[1])||0);}
+
+// 找出同案場所有分列記錄（同名稱+同日期+同時間）
+var oldDs=row.dates[moveTarget.di].dateStr;
+var oldS=row.startMin;var oldE=row.startMin+row.duration;
+var siblings=[];
+for(var i=0;i<schedule.length;i++){
+var r=schedule[i];if(r.name!==row.name)continue;
+for(var d2=0;d2<r.dates.length;d2++){
+if(r.dates[d2].dateStr===oldDs&&r.startMin===oldS&&(r.startMin+r.duration)===oldE){
+siblings.push({si:i,di:d2});
+}
+}
+}
+
+// 決定新的分列結構：每位防治師一筆（與原始 Excel 格式一致）
+// 先更新/複用現有分列，多餘的刪除，不足的新增
+var dur=row.duration;var name2=row.name;var task=row.dates[moveTarget.di].task;
+var area=row.area;var region=row.region;var group=row.group;
+var fixed=row.fixed;var needPermit=row.need_permit;var workOrder=row.work_order||'';
+
+// 更新現有分列
+for(var si2=0;si2<siblings.length&&si2<newTechs.length;si2++){
+var sib=siblings[si2];
+var sr=schedule[sib.si];
+sr.technician=newTechs[si2];sr.color=getTechColor(newTechs[si2]);
+sr.dates[sib.di].dateStr=nd;sr.dates[sib.di].task=task;
+sr.start_time=newTimeStr;sr.startMin=newStartMin;
+sr.modified=true;
+}
+// 新增不足的分列
+for(var ni=siblings.length;ni<newTechs.length;ni++){
+var newRow={id:schedule.length,name:name2,area:area,region:region,group:group,
+fixed:fixed,technician:newTechs[ni],work_order:workOrder,
+start_time:newTimeStr,duration:dur,startMin:newStartMin,
+need_permit:needPermit,is_restaurant:true,modified:true,
+dates:[{dateStr:nd,task:task}],color:getTechColor(newTechs[ni])};
+schedule.push(newRow);
+}
+// 刪除多餘的分列（從後往前刪）
+var toRemove=[];
+for(var ri2=newTechs.length;ri2<siblings.length;ri2++)toRemove.push(siblings[ri2].si);
+toRemove.sort(function(a,b){return b-a;});
+toRemove.forEach(function(idx){schedule.splice(idx,1);});
+
+if(!isFixed)dvDate=new Date(nd+'T00:00:00');
+var dateInp=document.getElementById('move-date');var timeInp=document.getElementById('move-time');
+dateInp.readOnly=false;dateInp.style.opacity='1';dateInp.style.cursor='';
+timeInp.readOnly=false;timeInp.style.opacity='1';timeInp.style.cursor='';
+closeMovePopup();renderAll();renderDayView();renderWorkload();pushUndo();autoSave();
+}
+document.addEventListener('click',function(e){var p=document.getElementById('move-popup');if(p.style.display==='block'&&!p.contains(e.target))closeMovePopup();});
+document.getElementById('move-date').addEventListener('keydown',function(e){if(e.key==='Enter')confirmMove();if(e.key==='Escape')closeMovePopup();});
+document.getElementById('move-time').addEventListener('keydown',function(e){if(e.key==='Enter')confirmMove();if(e.key==='Escape')closeMovePopup();});
+
+function renderBot(){
+var b1=schedule.filter(function(r){return !excluded.has(r.name)&&r.fixed;});
+var b2=schedule.filter(function(r){return !excluded.has(r.name)&&!r.fixed;});
+[b1,b2].forEach(function(brows,bi){
+brows.sort(function(a,b){return(a.dates[0]?a.dates[0].dateStr:'').localeCompare(b.dates[0]?b.dates[0].dateStr:'');});
+var tbody=document.getElementById('bot-tbody-'+(bi+1));
+if(!brows.length){tbody.innerHTML='<tr><td colspan="5"><div class="empty">無資料</div></td></tr>';return;}
+var html='';
+for(var i=0;i<brows.length;i++){var r=brows[i];html+='<tr><td><div class="client-name">'+r.name+'</div><div class="client-group">'+r.group+'</div></td><td><span class="tech-tag">'+r.technician+'</span></td><td style="font-family:DM Mono,monospace;font-size:11px">'+(r.dates[0]?fmt(r.dates[0].dateStr):'')+'</td><td style="font-family:DM Mono,monospace;font-size:11px">'+(r.dates[1]?fmt(r.dates[1].dateStr):'')+'</td><td style="font-family:DM Mono,monospace;font-size:11px">'+(r.dates[2]?fmt(r.dates[2].dateStr):'')+'</td></tr>';}
+tbody.innerHTML=html;
+});
+}
+function renderExport(){
+function toTSV(brows){var b='客戶名稱\t防治師\t第一次日期\t第二次日期\t第三次日期\n';for(var i=0;i<brows.length;i++){var r=brows[i];b+=r.name+'\t'+r.technician+'\t'+(r.dates[0]?r.dates[0].dateStr:'')+'\t'+(r.dates[1]?r.dates[1].dateStr:'')+'\t'+(r.dates[2]?r.dates[2].dateStr:'')+'\n';}return b;}
+document.getElementById('export-bot1').value=toTSV(schedule.filter(function(r){return !excluded.has(r.name)&&r.fixed;}));
+document.getElementById('export-bot2').value=toTSV(schedule.filter(function(r){return !excluded.has(r.name)&&!r.fixed;}));
+var f='公司客戶編號\t客戶名稱\t地區\t北中南\t防治師\t日期\t開始時間\t施作時間\t固定\t需申請工單\t任務內容\n';
+for(var i=0;i<schedule.length;i++){var r=schedule[i];for(var di=0;di<r.dates.length;di++){var d=r.dates[di];f+=(r.id||'')+'\t'+r.name+'\t'+r.area+'\t'+r.region+'\t'+r.technician+'\t'+d.dateStr+'\t'+r.start_time+'\t'+r.duration+'\t'+(r.fixed?'O':'')+'\t'+(r.need_permit?'O':'')+'\t'+d.task+'\n';}}
+document.getElementById('export-full').value=f;
+}
+function renderWorkload(){
+var container=document.getElementById('workload-content');
+if(!schedule.length){container.innerHTML='<div class="import-hint"><div class="icon">📊</div><h2>匯入排班後可查看工作量統計</h2></div>';return;}
+var cnt={};
+for(var si=0;si<schedule.length;si++){var row=schedule[si];var techs=row.technician.split(',');for(var di=0;di<row.dates.length;di++){for(var ti=0;ti<techs.length;ti++){var t=techs[ti].trim();if(!t)continue;if(!cnt[t])cnt[t]=0;cnt[t]++;}}}
+var maxC=1;for(var t in cnt){if(cnt[t]>maxC)maxC=cnt[t];}
+var techs=TECH_ORDER.filter(function(t){return cnt[t];});Object.keys(cnt).forEach(function(t){if(techs.indexOf(t)<0)techs.push(t);});
+var colors=['#4f8ef7','#3dd68c','#f7944f','#7c6af7','#f7d44f','#f75f5f','#5fd8f7','#f75fa8','#a8f75f','#f7a85f','#5ff7c2'];
+var html='<div style="margin-bottom:12px;font-size:12px;color:var(--text2)">本月各防治師施作場次統計（含多防治師案場重複計）</div><div class="workload-grid">';
+for(var ti=0;ti<techs.length;ti++){var t=techs[ti];var c=cnt[t]||0;var color=colors[ti%colors.length];var pct=Math.round(c/maxC*100);html+='<div class="workload-card"><div class="workload-name" style="color:'+color+'">'+t+'</div><div class="workload-count" style="color:'+color+'">'+c+'</div><div class="workload-sub">場次</div><div class="workload-bar-bg"><div class="workload-bar-fill" style="width:'+pct+'%;background:'+color+'"></div></div></div>';}
+var total=0;for(var t in cnt)total+=cnt[t];
+html+='</div><div style="font-size:11px;color:var(--text3)">共 '+schedule.length+' 個客戶，合計 '+total+' 場次</div>';
+container.innerHTML=html;
+}
+
+function exportExcel(type){
+if(!schedule.length){alert('請先匯入排班');return;}
+var month=document.getElementById('target-month').value;
+var parts=month.split('-');var y=parseInt(parts[0]);var m=parseInt(parts[1]);
+var monthName=y+'年'+m+'月';
+var rows;
+if(type==='batch1')rows=schedule.filter(function(r){return !excluded.has(r.name)&&r.fixed;});
+else if(type==='batch2')rows=schedule.filter(function(r){return !excluded.has(r.name)&&!r.fixed;});
+else rows=schedule;
+var wsData=[];
+wsData.push([null,'公司客戶編號','公司客戶名稱','地區','北、中南','是否施作','公司群組','施作次數','餐廳?','工單',monthName+'日期','開始時間','施作時間','開始日期與時間','結束日期與時間','防治師','固定','需申請進場工單','任務內容','標籤','每月第幾個','星期幾','週組','備用日期','備註',null]);
+for(var ri=0;ri<rows.length;ri++){
+var r=rows[ri];
+for(var di=0;di<r.dates.length;di++){
+var d=r.dates[di];var ds=d.dateStr;var dp=ds.split('-');
+var dateObj=new Date(parseInt(dp[0]),parseInt(dp[1])-1,parseInt(dp[2]));
+var tp=r.start_time?r.start_time.split(':'):['0','0'];var sh=parseInt(tp[0]),sm=parseInt(tp[1]);
+var startDt=new Date(parseInt(dp[0]),parseInt(dp[1])-1,parseInt(dp[2]),sh,sm);
+var endDt=new Date(startDt.getTime()+r.duration*60000);
+function fmtDt(dt){return dt.getFullYear()+'/'+(dt.getMonth()+1).toString().padStart(2,'0')+'/'+dt.getDate().toString().padStart(2,'0')+' '+dt.getHours().toString().padStart(2,'0')+':'+dt.getMinutes().toString().padStart(2,'0');}
+function fmtDate(dt){return dt.getFullYear()+'/'+(dt.getMonth()+1).toString().padStart(2,'0')+'/'+dt.getDate().toString().padStart(2,'0');}
+function fmtTime(h,m){return h.toString().padStart(2,'0')+':'+m.toString().padStart(2,'0');}
+var taskNum=di+1;var label='例行_'+taskNum+',例行-專責';
+wsData.push([false,r.id||'',r.name,r.area||'',r.region||'','是',r.group||'',r.dates.length,r.is_restaurant?'餐廳':'',r.work_order||'',fmtDate(dateObj),fmtTime(sh,sm),r.duration,fmtDt(startDt),fmtDt(endDt),r.technician||'',r.fixed?'O':'',r.need_permit?'O':'',d.task||'',label,'','','','',null,null]);
+}
+}
+var wb2=XLSX.utils.book_new();var ws=XLSX.utils.aoa_to_sheet(wsData);
+ws['!cols']=[{wch:4},{wch:14},{wch:35},{wch:12},{wch:6},{wch:6},{wch:18},{wch:6},{wch:6},{wch:12},{wch:12},{wch:8},{wch:8},{wch:18},{wch:18},{wch:12},{wch:5},{wch:8},{wch:12},{wch:20},{wch:8},{wch:6},{wch:8},{wch:12},{wch:10},{wch:4}];
+var sheetName=type==='batch1'?'第一批固定客戶':type==='batch2'?'第二批例行客戶':m+'月行程';
+XLSX.utils.book_append_sheet(wb2,ws,sheetName);
+var fileName=type==='batch1'?'機器人第一批_'+month+'.xlsx':type==='batch2'?'機器人第二批_'+month+'.xlsx':m+'月行程_'+month+'.xlsx';
+XLSX.writeFile(wb2,fileName);
+}
+
+function updateStats(){
+document.getElementById('s-total').textContent=schedule.length;
+document.getElementById('s-bot').textContent=schedule.filter(function(r){return !excluded.has(r.name);}).length;
+document.getElementById('s-excl').textContent=excluded.size;
+}
+function renderAll(){
+renderMain();renderBot();renderExport();updateStats();
+// 依目前開啟的 tab 同步刷新視圖
+if(document.getElementById('tab-dayview').classList.contains('active'))renderDayView();
+if(document.getElementById('tab-weekview').classList.contains('active')){renderWeekButtons();renderWeekView();}
+}
+function buildTechFilters(){
+var ts={};for(var i=0;i<schedule.length;i++){var tt=schedule[i].technician.split(',');for(var j=0;j<tt.length;j++){var t=tt[j].trim();if(t)ts[t]=1;}}
+var techs=TECH_ORDER.filter(function(t){return ts[t];});
+var colors=['#4f8ef7','#3dd68c','#f7944f','#7c6af7','#f7d44f','#f75f5f','#5fd8f7','#f75fa8','#a8f75f','#f7a85f','#5ff7c2'];
+var list=document.getElementById('tech-filter-list');
+var html='<div class="filter-item active" onclick="setFilter(\'tech\',\'all\',this)"><div class="filter-dot" style="background:var(--text3)"></div>全部</div>';
+for(var i=0;i<techs.length;i++)html+='<div class="filter-item" onclick="setFilter(\'tech\',\''+techs[i]+'\',this)"><div class="filter-dot" style="background:'+colors[i%colors.length]+'"></div>'+techs[i]+'</div>';
+list.innerHTML=html;
+}
+function setFilter(type,val,el){
+var container=el.parentElement;
+// 再點一次已選取的項目 → 取消，回到「全部」
+if(filters[type]===val&&val!=='all'){
+filters[type]='all';
+container.querySelectorAll('.filter-item').forEach(function(i){i.classList.remove('active');});
+container.querySelector('.filter-item').classList.add('active');
+applyFilters();return;
+}
+filters[type]=val;
+container.querySelectorAll('.filter-item').forEach(function(i){i.classList.remove('active');});
+el.classList.add('active');
+applyFilters();
+}
+function applyFilters(){renderMain();}
+function toggleExclude(name){if(excluded.has(name))excluded.delete(name);else excluded.add(name);renderAll();pushUndo();autoSave();}
+function resetExclusions(){excluded.clear();renderAll();}
+// ── 週覽 ──
+var wvCurrentWeek=0;
+function getMonthWeeks(){
+var month=document.getElementById('target-month').value;
+if(!month)return[];
+var parts=month.split('-');var y=parseInt(parts[0]);var m=parseInt(parts[1]);
+var weeks=[];var weekDays=[];
+var daysInMonth=new Date(y,m,0).getDate();
+for(var d=1;d<=daysInMonth;d++){
+var date=new Date(y,m-1,d);
+var dow=date.getDay();var iso=toISO(date);
+if(dow===0||dow===6)continue;// 跳過週末
+weekDays.push({iso:iso,date:date,isHol:isHolidayTW(iso)});
+// 週五或月末最後一個工作日 → 結束本週
+if(dow===5||d===daysInMonth){
+if(weekDays.length)weeks.push(weekDays.slice());
+weekDays=[];
+}
+}
+if(weekDays.length)weeks.push(weekDays.slice());
+return weeks;
+}
+function renderWeekButtons(){
+var weeks=getMonthWeeks();
+var btnContainer=document.getElementById('wv-week-btns');
+btnContainer.innerHTML='';
+for(var wi=0;wi<weeks.length;wi++){
+(function(i,wk){
+var btn=document.createElement('button');
+btn.className='wv-week-btn'+(i===wvCurrentWeek?' active':'');
+var first=wk[0];var last=wk[wk.length-1];
+var allHol=wk.every(function(d){return d.isHol;});
+// W 標籤
+var label='W'+(i+1)+'  '+(first.date.getMonth()+1)+'/'+(first.date.getDate())+'–'+(last.date.getMonth()+1)+'/'+last.date.getDate();
+btn.textContent=label;
+if(allHol)btn.style.opacity='0.4';
+btn.onclick=function(){wvCurrentWeek=i;renderWeekButtons();renderWeekView();};
+btnContainer.appendChild(btn);
+})(wi,weeks[wi]);
+}
+// 範圍標籤
+var rangeEl=document.getElementById('wv-range-label');
+if(weeks.length&&weeks[wvCurrentWeek]){
+var wk=weeks[wvCurrentWeek];
+var month2=document.getElementById('target-month').value;
+var parts2=month2.split('-');
+rangeEl.textContent=parts2[0]+'年'+parseInt(parts2[1])+'月 W'+(wvCurrentWeek+1);
+}
+}
+function renderWeekView(){
+var weeks=getMonthWeeks();
+if(!weeks.length){document.getElementById('wv-content').innerHTML='<div class="import-hint"><div class="icon">📆</div><h2>匯入排班後可查看週覽</h2></div>';return;}
+if(wvCurrentWeek>=weeks.length)wvCurrentWeek=0;
+var wk=weeks[wvCurrentWeek];
+var cs=detectConflicts();
+var todayIso=toISO(new Date());
+var holidayMap=parseHolidayInput();
+
+// 收集本週各天的工作
+var dayJobs={};// iso -> [{si,di,row,job}]
+wk.forEach(function(day){dayJobs[day.iso]=[];});
+for(var si=0;si<schedule.length;si++){
+var row=schedule[si];
+for(var di=0;di<row.dates.length;di++){
+var ds=row.dates[di].dateStr;
+if(!dayJobs[ds])continue;
+dayJobs[ds].push({si:si,di:di,row:row,isConflict:!!cs[si+'|'+di]});
+}
+}
+
+// 建立表格
+var content=document.getElementById('wv-content');content.innerHTML='';
+var table=document.createElement('table');table.className='wv-table';
+
+// 表頭
+var thead=document.createElement('thead');var htr=document.createElement('tr');
+var thTech=document.createElement('th');thTech.className='wv-th-tech';thTech.textContent='防治師';htr.appendChild(thTech);
+wk.forEach(function(day){
+var th=document.createElement('th');th.className='wv-th-day';
+if(day.iso===todayIso)th.classList.add('today');
+if(day.isHol)th.classList.add('holiday');
+var dow=['日','一','二','三','四','五','六'][day.date.getDay()];
+th.innerHTML=(day.date.getMonth()+1)+'/'+day.date.getDate()+'<br><span style="font-size:9px;opacity:.7">週'+dow+'</span>'+(day.isHol?'<br><span style="font-size:9px;color:var(--red)">假日</span>':'');
+htr.appendChild(th);
+});
+thead.appendChild(htr);table.appendChild(thead);
+
+// 每位防治師一列
+var tbody=document.createElement('tbody');
+TECH_ORDER.forEach(function(tn){
+var tc=TECH_COLORS[tn]||DEF_COLOR;
+var tr=document.createElement('tr');
+
+// 防治師名稱欄
+var tdLabel=document.createElement('td');tdLabel.className='wv-cell tech-label';tdLabel.textContent=tn;
+tdLabel.style.borderLeft='3px solid '+tc.border;tr.appendChild(tdLabel);
+
+// 每天的欄位
+wk.forEach(function(day){
+var td=document.createElement('td');
+td.className='wv-cell'+(day.isHol?' holiday-col':'');
+td.dataset.iso=day.iso;td.dataset.tech=tn;
+var onHol=holidayMap[tn]&&holidayMap[tn].indexOf(day.iso)>=0;
+if(onHol){td.classList.add('on-hol');var holTag=document.createElement('div');holTag.style.cssText='font-size:9px;color:var(--orange);text-align:center;padding:4px 0;opacity:.7;';holTag.textContent='🏖️ 休';td.appendChild(holTag);}
+
+// drop zone 事件
+td.addEventListener('dragover',function(e){e.preventDefault();e.dataTransfer.dropEffect='move';document.querySelectorAll('.wv-cell.wv-drag-over').forEach(function(c){c.classList.remove('wv-drag-over');});this.classList.add('wv-drag-over');});
+td.addEventListener('dragleave',function(e){if(!this.contains(e.relatedTarget))this.classList.remove('wv-drag-over');});
+td.addEventListener('drop',function(e){
+e.preventDefault();
+document.querySelectorAll('.wv-cell.wv-drag-over').forEach(function(c){c.classList.remove('wv-drag-over');});
+var dsi=parseInt(e.dataTransfer.getData('wv-si'));
+var ddi=parseInt(e.dataTransfer.getData('wv-di'));
+if(isNaN(dsi)||isNaN(ddi))return;
+var newIso=this.dataset.iso;
+var newTech=this.dataset.tech;
+var row=schedule[dsi];
+var oldDs=row.dates[ddi].dateStr;var oldS=row.startMin;var oldE=row.startMin+row.duration;
+// 同步所有同案場分列
+for(var i=0;i<schedule.length;i++){
+var r=schedule[i];if(r.name!==row.name)continue;
+for(var d2=0;d2<r.dates.length;d2++){
+if(r.dates[d2].dateStr===oldDs&&r.startMin===oldS&&(r.startMin+r.duration)===oldE){
+r.dates[d2].dateStr=newIso;
+r.technician=newTech;r.color=getTechColor(newTech);r.modified=true;
+}
+}
+}
+renderAll();renderDayView();renderWorkload();pushUndo();autoSave();
+});
+
+// 該防治師當天的案場
+var jobs=dayJobs[day.iso].filter(function(j){
+return j.row.technician.split(',').map(function(t){return t.trim();}).indexOf(tn)>=0;
+});
+jobs.sort(function(a,b){return a.row.startMin-b.row.startMin;});
+jobs.forEach(function(j){
+var jobDiv=document.createElement('div');
+jobDiv.className='wv-job'+(j.isConflict?' is-conflict':'');
+jobDiv.draggable=true;
+jobDiv.style.background=j.isConflict?'rgba(200,30,58,.08)':tc.bg;
+jobDiv.style.borderLeftColor=j.isConflict?'var(--red)':tc.border;
+jobDiv.style.color=j.isConflict?'#9f1239':tc.text;
+var nameDiv=document.createElement('div');nameDiv.className='wv-job-name';
+nameDiv.textContent=(j.row.fixed?'🔒 ':'')+j.row.name;
+nameDiv.title=j.row.name;
+var timeDiv=document.createElement('div');timeDiv.className='wv-job-time';
+timeDiv.textContent=minToStr(j.row.startMin)+'–'+minToStr(j.row.startMin+j.row.duration);
+jobDiv.appendChild(nameDiv);jobDiv.appendChild(timeDiv);
+if(j.isConflict){var ci=document.createElement('div');ci.style.cssText='font-size:8px;color:var(--red);';ci.textContent='⚠️ 衝堂';jobDiv.appendChild(ci);}
+
+// 拖曳事件
+jobDiv.addEventListener('dragstart',function(e){
+e.dataTransfer.setData('wv-si',String(j.si));
+e.dataTransfer.setData('wv-di',String(j.di));
+e.dataTransfer.effectAllowed='move';
+var ghost=document.createElement('div');
+ghost.style.cssText='position:fixed;top:-999px;background:'+tc.bg+';border-left:3px solid '+tc.border+';color:'+tc.text+';padding:3px 8px;border-radius:4px;font-size:11px;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.2);';
+ghost.textContent=j.row.name;document.body.appendChild(ghost);
+e.dataTransfer.setDragImage(ghost,60,16);
+setTimeout(function(){ghost.remove();jobDiv.classList.add('wv-dragging');},0);
+});
+jobDiv.addEventListener('dragend',function(){
+jobDiv.classList.remove('wv-dragging');
+document.querySelectorAll('.wv-cell.wv-drag-over').forEach(function(c){c.classList.remove('wv-drag-over');});
+});
+
+// 點擊→跳到 DayView 該天
+var isDragging=false;
+jobDiv.addEventListener('mousedown',function(){isDragging=false;});
+jobDiv.addEventListener('mousemove',function(){isDragging=true;});
+jobDiv.addEventListener('click',function(){if(!isDragging){dvDate=new Date(day.iso+'T00:00:00');switchTab('dayview');}});
+
+td.appendChild(jobDiv);
+});
+tr.appendChild(td);
+});
+tbody.appendChild(tr);
+});
+table.appendChild(tbody);content.appendChild(table);
+}
+
+function switchTab(tab){
+['schedule','dayview','weekview','bot','export','workload','clients'].forEach(function(t){
+document.getElementById('tab-'+t).classList.toggle('active',t===tab);
+document.getElementById('tab-btn-'+t).classList.toggle('active',t===tab);
+});
+if(tab==='export')renderExport();
+if(tab==='clients')renderClientTable();
+if(tab==='dayview'){loadHolidayInput();renderDayView();}
+if(tab==='workload')renderWorkload();
+if(tab==='weekview'){renderWeekButtons();renderWeekView();}
+}
+function copyText(id){navigator.clipboard.writeText(document.getElementById(id).value).then(function(){var btn=event.target;btn.textContent='✅ 已複製';setTimeout(function(){btn.textContent='📋 複製';},2000);});}
+function downloadTSV(id,name){var blob=new Blob(['\ufeff'+document.getElementById(id).value],{type:'text/tab-separated-values;charset=utf-8'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name+'_'+document.getElementById('target-month').value+'.tsv';a.click();}
+
+// 客戶管理（純資料，不再設定排班規則）
+function openClientModal(idx){
+var isNew=idx===-1;
+document.getElementById('modal-title').textContent=isNew?'新增客戶資料':'編輯客戶資料';
+document.getElementById('cf-edit-idx').value=idx;
+document.getElementById('cf-del-btn').style.display=isNew?'none':'inline-flex';
+if(isNew){document.getElementById('cf-name').value='';document.getElementById('cf-group').value='';document.getElementById('cf-area').value='';document.getElementById('cf-region').value='北';document.getElementById('cf-tech').value='';document.getElementById('cf-time').value='';document.getElementById('cf-duration').value='45';document.getElementById('cf-fixed').value='0';document.getElementById('cf-permit').value='0';}
+else{var c=clientDB[idx];document.getElementById('cf-name').value=c.name||'';document.getElementById('cf-group').value=c.group||'';document.getElementById('cf-area').value=c.area||'';document.getElementById('cf-region').value=c.region||'北';document.getElementById('cf-tech').value=c.technician||'';document.getElementById('cf-time').value=c.start_time||'';document.getElementById('cf-duration').value=c.duration||45;document.getElementById('cf-fixed').value=c.fixed?'1':'0';document.getElementById('cf-permit').value=c.need_permit?'1':'0';}
+document.getElementById('client-modal').classList.add('show');
+}
+function closeClientModal(){document.getElementById('client-modal').classList.remove('show');}
+function saveClient(){
+var name=document.getElementById('cf-name').value.trim();if(!name){alert('請輸入客戶名稱');return;}
+var tech=document.getElementById('cf-tech').value.trim();if(!tech){alert('請輸入防治師');return;}
+var client={id:null,name:name,group:document.getElementById('cf-group').value.trim(),area:document.getElementById('cf-area').value.trim(),region:document.getElementById('cf-region').value,technician:tech,start_time:document.getElementById('cf-time').value.trim(),duration:parseInt(document.getElementById('cf-duration').value)||45,fixed:document.getElementById('cf-fixed').value==='1',need_permit:document.getElementById('cf-permit').value==='1',is_restaurant:true,work_order:''};
+var ei=parseInt(document.getElementById('cf-edit-idx').value);
+if(ei===-1)clientDB.push(client);else clientDB[ei]=client;
+closeClientModal();renderClientTable();
+}
+function deleteClient(){var idx=parseInt(document.getElementById('cf-edit-idx').value);if(idx<0)return;if(!confirm('確定要刪除「'+clientDB[idx].name+'」嗎？'))return;clientDB.splice(idx,1);closeClientModal();renderClientTable();}
+function quickDelete(idx){if(!confirm('確定要刪除「'+clientDB[idx].name+'」嗎？'))return;clientDB.splice(idx,1);renderClientTable();}
+function renderClientTable(){
+var q=document.getElementById('cl-search').value.toLowerCase();var region=document.getElementById('cl-region').value;var tbody=document.getElementById('client-tbody');
+var filtered=[];for(var i=0;i<clientDB.length;i++){var c=clientDB[i];if(q&&(c.name||'').toLowerCase().indexOf(q)<0&&(c.group||'').toLowerCase().indexOf(q)<0&&(c.technician||'').toLowerCase().indexOf(q)<0)continue;if(region!=='all'&&c.region!==region)continue;filtered.push({c:c,i:i});}
+if(!filtered.length){tbody.innerHTML='<tr><td colspan="7"><div class="empty">沒有符合的客戶</div></td></tr>';return;}
+var html='';
+for(var fi=0;fi<filtered.length;fi++){
+var c=filtered[fi].c;var i=filtered[fi].i;
+var rb=c.region==='北'?'<span class="badge badge-north">北</span>':c.region==='中南'?'<span class="badge badge-south">中南</span>':'<span style="font-size:10px;color:var(--text3)">'+(c.region||'—')+'</span>';
+var tb=c.fixed?'<span class="badge badge-fixed">固定</span>':'<span class="badge badge-normal">例行</span>';
+html+='<tr><td><div class="client-name" title="'+c.name+'">'+c.name+'</div><div class="client-group">'+(c.group||'')+'</div></td><td><span class="tech-tag">'+(c.technician||'—')+'</span></td><td>'+rb+'</td><td>'+tb+'</td><td style="font-size:11px;color:var(--text2)">'+(c.area||'—')+'</td><td style="font-family:DM Mono,monospace;font-size:11px;color:var(--text2)">'+(c.start_time||'—')+'</td><td><button class="edit-btn" onclick="openClientModal('+i+')">✏️</button><button class="del-btn" onclick="quickDelete('+i+')">✕</button></td></tr>';
+}
+tbody.innerHTML=html;
+}
+
+// 啟動時嘗試載入已儲存的排班
+(function(){
+var month=document.getElementById('target-month').value;
+var saved=loadSavedSchedule(month);
+if(saved&&schedule.length){
+document.getElementById('hint').style.display='none';
+document.getElementById('main-table').style.display='table';
+document.getElementById('save-btn').style.display='inline-flex';
+var parts=month.split('-');
+dvDate=new Date(parseInt(parts[0]),parseInt(parts[1])-1,1);
+loadHolidayInput();
+buildTechFilters();renderAll();renderDayView();renderWorkload();
+}
+})();
+</script>
 
-    <div class="page-header">
-        <h1>🗓️ 排班衝突檢查工具</h1>
-    </div>
-
-    <div class="card">
-        <div class="card-body">
-            <div class="upload-area">
-                <span class="upload-icon">📂</span>
-                <input type="file" id="fileInput" accept=".xlsx,.xls" />
-            </div>
-            <ul class="rules-list">
-                <li>📋 讀取 <strong>第一張工作表</strong>，資料從第 2 列開始（第 1 列為標題）</li>
-                <li>⛔ 頭尾相接（如 10:00 結束、10:00 開始）<strong>不算衝突</strong></li>
-            </ul>
-            <br>
-            <table class="info-table">
-                <thead>
-                    <tr>
-                        <th>Excel 欄位</th>
-                        <th>欄名</th>
-                        <th>說明</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>C</td>
-                        <td>客戶名稱</td>
-                        <td>行程對應的客戶／案件名稱</td>
-                    </tr>
-                    <tr>
-                        <td>D</td>
-                        <td>地區</td>
-                        <td>服務地區（目前保留備用）</td>
-                    </tr>
-                    <tr>
-                        <td>K</td>
-                        <td>日期</td>
-                        <td>行程日期，支援 Excel 日期格式或文字</td>
-                    </tr>
-                    <tr>
-                        <td>L</td>
-                        <td>開始時間</td>
-                        <td>行程起始時間（如 09:00 或小數表示）</td>
-                    </tr>
-                    <tr>
-                        <td>M</td>
-                        <td>時長（分鐘）</td>
-                        <td>行程持續分鐘數（整數）</td>
-                    </tr>
-                    <tr>
-                        <td>P</td>
-                        <td>人員</td>
-                        <td>負責人員，多人可用逗號、頓號或斜線分隔</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- 1. 日期檢視 (Gantt) -->
-    <div id="ganttCard" class="card" style="display: none;">
-        <div class="card-body">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0; font-size: 1.15rem; color: var(--navy);">📊 日期檢視 (衝突) </h3>
-                <button class="btn-download" data-html2canvas-ignore="true"
-                    onclick="downloadPDF('ganttResult', '排班_日期檢視.pdf')">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    下載 PDF
-                </button>
-            </div>
-            <div id="ganttResult" class="timeline-container"></div>
-        </div>
-    </div>
-
-    <!-- 2. 月曆視圖 (Calendar) -->
-    <div id="calendarCard" class="card" style="display: none;">
-        <div class="card-body">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h3 style="margin: 0; font-size: 1.15rem; color: var(--navy);">📅 月曆視圖報告</h3>
-                <button class="btn-download" data-html2canvas-ignore="true"
-                    onclick="downloadPDF('calendarResult', '排班_月曆視圖.pdf')">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    下載 PDF
-                </button>
-            </div>
-
-            <div id="calendarFilter" style="margin-bottom: 20px; display: flex; gap: 8px; flex-wrap: wrap;"
-                data-html2canvas-ignore="true"></div>
-
-            <div id="calendarResult" class="calendar-wrapper" style="margin-bottom: 0;"></div>
-        </div>
-    </div>
-
-    <!-- 2.5 時間網格視圖 (Time Grid) -->
-    <div id="timeGridCard" class="card" style="display: none;">
-        <div class="card-body">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h3 style="margin: 0; font-size: 1.15rem; color: var(--navy);">🕒 月曆時間網格視圖 (不顯示衝突 和 重複名字)</h3>
-                <button class="btn-download" data-html2canvas-ignore="true"
-                    onclick="downloadPDF('timeGridResult', '排班_時間網格.pdf')">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    下載 PDF
-                </button>
-            </div>
-            <div id="timeGridResult" style="margin-bottom: 0;"></div>
-        </div>
-    </div>
-
-    <!-- 2.6 個人工作表 (Personal Time Grid) -->
-    <div id="personTimeGridCard" class="card" style="display: none;">
-        <div class="card-body">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
-                    <h3 style="margin: 0; font-size: 1.15rem; color: var(--navy);">👤 個人月曆時間網格 (輸出工作表)</h3>
-                </div>
-                <div style="display: flex; gap: 10px;" data-html2canvas-ignore="true">
-                    <button class="btn-download" id="downloadPersonGridBtn"
-                        onclick="downloadPDF('personTimeGridResult', '個人工作表.pdf')">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="7 10 12 15 17 10"></polyline>
-                            <line x1="12" y1="15" x2="12" y2="3"></line>
-                        </svg>
-                        下載個人 PDF
-                    </button>
-                    <button class="btn-download" onclick="downloadAllPeoplePDF()" style="background: var(--success);">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="7 10 12 15 17 10"></polyline>
-                            <line x1="12" y1="15" x2="12" y2="3"></line>
-                        </svg>
-                        下載全部人 PDF
-                    </button>
-                </div>
-            </div>
-            <div id="personGridFilter" style="margin-bottom: 20px; display: flex; gap: 8px; flex-wrap: wrap;"
-                data-html2canvas-ignore="true"></div>
-            <div id="personTimeGridResult" style="margin-bottom: 0;"></div>
-        </div>
-    </div>
-
-    <!-- 3. 文字結果 (Text) -->
-    <div id="textCard" class="card" style="display: none;">
-        <div class="card-body">
-            <h3 style="margin: 0 0 16px; font-size: 1.15rem; color: var(--navy);">📋 衝突文字詳細清單</h3>
-            <div id="textResult"></div>
-        </div>
-    </div>
-
-
-    <script>
-        document.getElementById("fileInput").addEventListener("change", handleFile);
-
-        const START_HOUR = 8;
-        const END_HOUR = 22;
-        const TOTAL_MINS = (END_HOUR - START_HOUR) * 60;
-
-        function getStringColor(str, isDark = false) {
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) {
-                hash = str.charCodeAt(i) + ((hash << 5) - hash);
-                hash = hash & hash; // Convert to 32bit integer
-            }
-            // 使用黃金比例發散色相，避免顏色太接近
-            let h = Math.abs((hash * 137.5) % 360);
-            return isDark ? `hsl(${h}, 70%, 35%)` : `hsl(${h}, 85%, 90%)`;
-        }
-
-        let selectedPeople = new Set(['all']);
-        let highlightedPerson = null; // 用於時間網格高亮
-        let currentPersonForGrid = null; // 用於個人工作表篩選
-        let cachedAllEvents = {};
-        let cachedSortedMonths = [];
-        let cachedAllDateEvents = {};
-
-        function toggleHighlight(personName) {
-            if (highlightedPerson === personName) {
-                highlightedPerson = null;
-            } else {
-                highlightedPerson = personName;
-            }
-
-            document.querySelectorAll('.tg-person-dot').forEach(dot => {
-                const dotPerson = dot.getAttribute('data-person');
-                if (highlightedPerson && dotPerson !== highlightedPerson) {
-                    dot.classList.add('is-dimmed');
-                } else {
-                    dot.classList.remove('is-dimmed');
-                }
-            });
-        }
-
-        function filterCalendar(personName, btnElement) {
-            const allBtn = document.querySelector('#calendarFilter .filter-btn[data-person="all"]');
-
-            if (personName === 'all') {
-                selectedPeople.clear();
-                selectedPeople.add('all');
-                document.querySelectorAll('#calendarFilter .filter-btn').forEach(b => b.classList.remove('active'));
-                if (btnElement) btnElement.classList.add('active');
-            } else {
-                if (selectedPeople.has('all')) {
-                    selectedPeople.clear();
-                    if (allBtn) allBtn.classList.remove('active');
-                }
-
-                if (selectedPeople.has(personName)) {
-                    selectedPeople.delete(personName);
-                    if (btnElement) btnElement.classList.remove('active');
-                } else {
-                    selectedPeople.add(personName);
-                    if (btnElement) btnElement.classList.add('active');
-                }
-
-                if (selectedPeople.size === 0) {
-                    selectedPeople.add('all');
-                    if (allBtn) allBtn.classList.add('active');
-                }
-            }
-
-            const events = document.querySelectorAll('.calendar-event');
-            events.forEach(el => {
-                const eventPerson = el.getAttribute('data-person');
-                if (selectedPeople.has('all') || selectedPeople.has(eventPerson)) {
-                    el.style.display = 'block';
-                } else {
-                    el.style.display = 'none';
-                }
-            });
-        }
-
-        function switchPersonGrid(personName, btnElement) {
-            currentPersonForGrid = personName;
-            document.querySelectorAll('#personGridFilter .filter-btn').forEach(b => b.classList.remove('active'));
-            if (btnElement) btnElement.classList.add('active');
-
-            renderPersonTimeGrid();
-
-            // 更新下載按鍵的檔名
-            const downloadBtn = document.getElementById('downloadPersonGridBtn');
-            downloadBtn.onclick = () => downloadPDF('personTimeGridResult', `排班_個人工作表_${personName}.pdf`);
-        }
-        function formatExcelDate(val) {
-            if (typeof val === 'number') {
-                const date = new Date(Math.round((val - 25569) * 86400 * 1000));
-                return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, "0")}-${date.getDate().toString().padStart(2, "0")}`;
-            }
-            return val || "未知日期";
-        }
-
-        function parseTime(t) {
-            if (!t) return 0;
-            if (!isNaN(t)) return Math.round(t * 24 * 60);
-            let p = t.toString().split(":");
-            return p.length < 2 ? 0 : parseInt(p[0]) * 60 + parseInt(p[1]);
-        }
-
-        function formatTime(m) {
-            return `${Math.floor(m / 60).toString().padStart(2, "0")}:${(m % 60).toString().padStart(2, "0")}`;
-        }
-
-        function parseNames(str) {
-            if (!str) return [];
-            return str.toString().replace(/[、，\/]/g, ",").split(",").map(s => s.trim()).filter(Boolean);
-        }
-
-        function handleFile(e) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const data = new Uint8Array(event.target.result);
-                const workbook = XLSX.read(data, { type: "array" });
-                const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
-                processData(rows);
-            };
-            reader.readAsArrayBuffer(e.target.files[0]);
-        }
-
-        function processData(rows) {
-            let allEvents = {};
-            let conflicts = {};
-            let found = false;
-
-            for (let i = 1; i < rows.length; i++) {
-                let r = rows[i];
-                if (!r || !r[10]) continue;
-
-                let date = formatExcelDate(r[10]);
-                let start = parseTime(r[11]);
-                let dur = parseInt(r[12]);
-                let end = start + dur;
-                let area = (r[3] || "").toString().trim();
-                let client = (r[2] || "未知客戶");
-                let names = parseNames(r[15]);
-
-                names.forEach(name => {
-                    if (!allEvents[name]) allEvents[name] = {};
-                    if (!allEvents[name][date]) allEvents[name][date] = [];
-                    allEvents[name][date].push({ start, end, area, client, id: i, hasConflict: false });
-                });
-            }
-
-            for (let name in allEvents) {
-                for (let date in allEvents[name]) {
-                    let dayEvents = allEvents[name][date];
-                    for (let i = 0; i < dayEvents.length; i++) {
-                        for (let j = i + 1; j < dayEvents.length; j++) {
-                            let e1 = dayEvents[i], e2 = dayEvents[j];
-                            if (e1.start < e2.end && e1.end > e2.start) {
-                                e1.hasConflict = e2.hasConflict = true;
-                                found = true;
-                                if (!conflicts[name]) conflicts[name] = [];
-                                let msg = `${date} | ${formatTime(e1.start)}-${formatTime(e1.end)} (第 ${e1.id + 1} 列) 與 ${formatTime(e2.start)}-${formatTime(e2.end)} (第 ${e2.id + 1} 列)`;
-                                if (!conflicts[name].includes(msg)) conflicts[name].push(msg);
-                            }
-                        }
-                    }
-                }
-            }
-
-            render(conflicts, allEvents, found);
-        }
-
-        function render(conflicts, allEvents, found) {
-            const textDiv = document.getElementById("textResult");
-            textDiv.innerHTML = found ? "" : '<div class="success-msg">🎉 檢查完成，未發現異常衝突</div>';
-            for (let name in conflicts) {
-                let box = document.createElement("div");
-                box.className = "conflict-card";
-                box.innerHTML = `<div class="cc-name">⚠️ ${name} 行程衝突</div>` + conflicts[name].map(m => `<div class="cc-row">${m}</div>`).join("");
-                textDiv.appendChild(box);
-            }
-
-            const hasAnyEvent = Object.keys(allEvents).length > 0;
-            document.getElementById("ganttCard").style.display = found ? "block" : "none";
-            document.getElementById("calendarCard").style.display = hasAnyEvent ? "block" : "none";
-            document.getElementById("textCard").style.display = hasAnyEvent ? "block" : "none";
-
-            // ==== 月曆結果 ====
-            const calendarDiv = document.getElementById("calendarResult");
-            calendarDiv.innerHTML = "";
-            const filterDiv = document.getElementById("calendarFilter");
-            filterDiv.innerHTML = "";
-
-            if (hasAnyEvent) {
-                const allDateEvents = {};
-                const uniquePeople = new Set();
-
-                for (let name in allEvents) {
-                    uniquePeople.add(name);
-                    for (let date in allEvents[name]) {
-                        if (!allDateEvents[date]) allDateEvents[date] = [];
-                        allEvents[name][date].forEach(e => {
-                            allDateEvents[date].push({ ...e, person: name });
-                        });
-                    }
-                }
-
-                selectedPeople = new Set(['all']);
-                filterDiv.innerHTML = `<button class="filter-btn active" data-person="all" onclick="filterCalendar('all', this)">顯示全部</button>`;
-
-                const personGridFilterDiv = document.getElementById("personGridFilter");
-                personGridFilterDiv.innerHTML = "";
-
-                Array.from(uniquePeople).sort().forEach((person, idx) => {
-                    const bg = getStringColor(person);
-                    const color = getStringColor(person, true);
-                    const btnHtml = `<button class="filter-btn" data-person="${person}" style="background:${bg}; color:${color}; border-color:${color}33;" onclick="[ACTION]('${person}', this)">${person}</button>`;
-
-                    filterDiv.innerHTML += btnHtml.replace('[ACTION]', 'filterCalendar');
-                    personGridFilterDiv.innerHTML += btnHtml.replace('[ACTION]', 'switchPersonGrid');
-
-                    if (idx === 0) {
-                        currentPersonForGrid = person;
-                    }
-                });
-
-                // 為個人篩選器加上第一個人的 active 狀態
-                if (personGridFilterDiv.firstChild) {
-                    personGridFilterDiv.firstChild.classList.add('active');
-                }
-                const downloadBtn = document.getElementById('downloadPersonGridBtn');
-                if (currentPersonForGrid) {
-                    downloadBtn.onclick = () => downloadPDF('personTimeGridResult', `排班_個人工作表_${currentPersonForGrid}.pdf`);
-                }
-
-                const monthsMap = {};
-                Object.keys(allDateEvents).forEach(dateStr => {
-                    const ym = dateStr.substring(0, 7);
-                    if (!monthsMap[ym]) monthsMap[ym] = true;
-                });
-                const sortedMonths = Object.keys(monthsMap).sort();
-
-                let calHtml = "";
-                sortedMonths.forEach(ym => {
-                    const [year, month] = ym.split("-").map(Number);
-                    calHtml += `<div class="calendar-month-title">${year} 年 ${month} 月</div>`;
-                    calHtml += `<div class="calendar-grid">`;
-                    const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
-                    dayNames.forEach(d => { calHtml += `<div class="calendar-header-day">${d}</div>`; });
-
-                    const firstDate = new Date(year, month - 1, 1);
-                    const startDate = new Date(firstDate);
-                    startDate.setDate(1 - firstDate.getDay());
-                    const lastDate = new Date(year, month, 0);
-                    const endDate = new Date(lastDate);
-                    endDate.setDate(lastDate.getDate() + (6 - lastDate.getDay()));
-
-                    let iter = new Date(startDate);
-                    while (iter <= endDate) {
-                        const d = iter.getDate();
-                        const m = iter.getMonth() + 1;
-                        const y = iter.getFullYear();
-                        const isCurrentMonth = (m === month && y === year);
-                        const currentStr = `${y}-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
-
-                        const cellClass = isCurrentMonth ? "calendar-cell" : "calendar-cell empty";
-                        calHtml += `<div class="${cellClass}">`;
-                        const dateStyle = isCurrentMonth ? "" : "color: var(--muted); opacity: 0.6;";
-                        calHtml += `<div class="calendar-date-num" style="${dateStyle}">${d}</div>`;
-                        if (allDateEvents[currentStr]) {
-                            const dailyEvents = allDateEvents[currentStr].sort((a, b) => a.start - b.start);
-                            dailyEvents.forEach(e => {
-                                const conflictClass = e.hasConflict ? " conflict" : "";
-                                const timeStr = `${formatTime(e.start)}-${formatTime(e.end)}`;
-                                let customStyle = "";
-                                if (!e.hasConflict) {
-                                    const bg = getStringColor(e.person);
-                                    const color = getStringColor(e.person, true);
-                                    customStyle = `background-color: ${bg}; color: ${color}; border-color: ${color}40;`;
-                                }
-                                if (!isCurrentMonth) customStyle += " opacity: 0.5;";
-                                calHtml += `<div class="calendar-event${conflictClass}" data-person="${e.person}" style="${customStyle}" title="👤 ${e.person} | 🕒 ${timeStr} | 🏢 ${e.client}">
-                                    ${e.person} #${e.id + 1}
-                                </div>`;
-                            });
-                        }
-                        calHtml += `</div>`;
-                        iter.setDate(iter.getDate() + 1);
-                    }
-                    calHtml += `</div>`;
-                });
-                calendarDiv.innerHTML = calHtml;
-
-                // 快取資料供後續個人切換使用
-                cachedAllEvents = allEvents;
-                cachedSortedMonths = sortedMonths;
-                cachedAllDateEvents = allDateEvents;
-
-                // ==== 時間網格視圖：按週換行 ====
-                renderGeneralTimeGrid();
-
-                // ==== 個人工作表 ====
-                if (currentPersonForGrid) {
-                    document.getElementById("personTimeGridCard").style.display = "block";
-                    renderPersonTimeGrid();
-                }
-
-            } else {
-                document.getElementById("timeGridCard").style.display = "none";
-                document.getElementById("personTimeGridCard").style.display = "none";
-            }
-
-            // ==== 甘特圖結果 ====
-            const ganttDiv = document.getElementById("ganttResult");
-
-            if (!found) {
-                ganttDiv.innerHTML = "";
-                return;
-            }
-
-            const dateMap = {};
-            for (let name in allEvents) {
-                if (!conflicts[name]) continue;
-                for (let date in allEvents[name]) {
-                    const hasConflictOnDay = allEvents[name][date].some(e => e.hasConflict);
-                    if (!hasConflictOnDay) continue;
-                    if (!dateMap[date]) dateMap[date] = [];
-                    dateMap[date].push({ name, events: allEvents[name][date] });
-                }
-            }
-
-            ganttDiv.innerHTML = "";
-
-            const sortedDates = Object.keys(dateMap).sort();
-            for (let date of sortedDates) {
-                const dateHeader = document.createElement("div");
-                dateHeader.className = "date-group-header";
-                dateHeader.innerHTML = `📅 ${date}`;
-                ganttDiv.appendChild(dateHeader);
-
-                const dateBlock = document.createElement("div");
-                dateBlock.className = "date-group";
-
-                for (let { name, events } of dateMap[date]) {
-                    let row = document.createElement("div");
-                    row.className = "person-row";
-
-                    let info = document.createElement("div");
-                    info.className = "person-name";
-                    info.innerHTML = `<span>👤 ${name}</span>`;
-                    row.appendChild(info);
-
-                    let track = document.createElement("div");
-                    track.className = "gantt-track";
-
-                    for (let h = START_HOUR; h <= END_HOUR; h++) {
-                        let left = ((h - START_HOUR) * 60 / TOTAL_MINS) * 100;
-                        let label = document.createElement("div");
-                        label.className = "time-label";
-                        label.style.left = left + "%";
-                        label.innerText = h + ":00";
-                        track.appendChild(label);
-                    }
-
-                    events.forEach(e => {
-                        let block = document.createElement("div");
-                        block.className = "job-block" + (e.hasConflict ? " has-conflict" : "");
-                        let left = ((e.start - START_HOUR * 60) / TOTAL_MINS) * 100;
-                        let width = ((e.end - e.start) / TOTAL_MINS) * 100;
-                        block.style.left = Math.max(0, left) + "%";
-                        block.style.width = width + "%";
-                        block.title = `第 ${e.id + 1} 列　${formatTime(e.start)}-${formatTime(e.end)}　${e.client} (${e.area})`;
-                        block.innerText = e.client.substring(0, 5);
-                        track.appendChild(block);
-                    });
-
-                    const textList = document.createElement("div");
-                    textList.className = "event-text-list";
-
-                    const sorted = [...events].sort((a, b) => a.start - b.start);
-                    sorted.forEach(e => {
-                        let item = document.createElement("span");
-                        item.className = "ev-item" + (e.hasConflict ? " conflict" : "");
-                        item.innerText = `${formatTime(e.start)}-${formatTime(e.end)} ${e.client.substring(0, 6)} #${e.id + 1}`;
-                        textList.appendChild(item);
-                    });
-
-                    row.appendChild(track);
-                    row.appendChild(textList);
-
-                    dateBlock.appendChild(row);
-                }
-
-                ganttDiv.appendChild(dateBlock);
-            }
-        }
-
-        const TG_START_HOUR = 7;
-        const TG_END_HOUR = 24;
-        const HEIGHT_PER_HOUR = 122;
-
-        function renderGeneralTimeGrid() {
-            const timeGridDiv = document.getElementById("timeGridResult");
-            timeGridDiv.innerHTML = "";
-            timeGridDiv.classList.remove("is-personal");
-            document.getElementById("timeGridCard").style.display = "block";
-            renderTimeGrid(timeGridDiv, null);
-        }
-
-        function renderPersonTimeGrid() {
-            const personTimeGridDiv = document.getElementById("personTimeGridResult");
-            personTimeGridDiv.innerHTML = "";
-            personTimeGridDiv.classList.add("is-personal");
-            renderTimeGrid(personTimeGridDiv, currentPersonForGrid);
-        }
-
-        function renderTimeGrid(container, limitPerson) {
-            const sortedMonths = cachedSortedMonths;
-            const allDateEvents = cachedAllDateEvents;
-            const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
-            // 個人工作表高度折半
-            const hph = limitPerson ? 61 : 122;
-
-            sortedMonths.forEach(ym => {
-                const [year, month] = ym.split("-").map(Number);
-                const monthTitle = document.createElement("div");
-                monthTitle.className = "calendar-month-title";
-                monthTitle.textContent = `${year} 年 ${month} 月`;
-                container.appendChild(monthTitle);
-
-                const weeks = [];
-                let currentWeek = [];
-                const firstDate = new Date(year, month - 1, 1);
-                const startDate = new Date(firstDate);
-                startDate.setDate(1 - firstDate.getDay());
-                const lastDate = new Date(year, month, 0);
-                const endDate = new Date(lastDate);
-                endDate.setDate(lastDate.getDate() + (6 - lastDate.getDay()));
-
-                let iter = new Date(startDate);
-                while (iter <= endDate) {
-                    const d = iter.getDate();
-                    const m = iter.getMonth() + 1;
-                    const y = iter.getFullYear();
-                    const isCurrentMonth = (m === month && y === year);
-                    const dateStr = `${y}-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
-                    currentWeek.push({ day: d, isCurrentMonth, dateStr });
-                    if (currentWeek.length === 7) {
-                        weeks.push(currentWeek);
-                        currentWeek = [];
-                    }
-                    iter.setDate(iter.getDate() + 1);
-                }
-
-                weeks.forEach(week => {
-                    const weekRow = document.createElement("div");
-                    weekRow.className = "tg-week-row";
-
-                    const timeAxis = document.createElement("div");
-                    timeAxis.className = "tg-time-axis";
-                    const axisHeader = document.createElement("div");
-                    axisHeader.className = "tg-axis-header";
-                    axisHeader.textContent = "時間";
-                    timeAxis.appendChild(axisHeader);
-                    for (let h = TG_START_HOUR; h <= TG_END_HOUR; h++) {
-                        const cell = document.createElement("div");
-                        cell.className = "tg-axis-cell";
-                        cell.style.height = hph + "px";
-                        cell.textContent = h + ":00";
-                        timeAxis.appendChild(cell);
-                    }
-                    weekRow.appendChild(timeAxis);
-
-                    const daysContainer = document.createElement("div");
-                    daysContainer.className = "tg-days-container";
-
-                    week.forEach((dayObj, idx) => {
-                        const { day, isCurrentMonth, dateStr } = dayObj;
-                        const dayCol = document.createElement("div");
-                        dayCol.className = "tg-day-col";
-                        const header = document.createElement("div");
-                        header.className = "tg-day-header";
-                        if (!isCurrentMonth) {
-                            header.style.color = "var(--muted)";
-                            header.style.backgroundColor = "#f8fafc";
-                            header.style.opacity = "0.7";
-                        }
-                        header.innerHTML = `<span>${day}</span><span style="font-size:0.7rem;font-weight:400;">(${dayNames[idx]})</span>`;
-                        dayCol.appendChild(header);
-
-                        const eventsByHour = {};
-                        if (dateStr && allDateEvents[dateStr]) {
-                            allDateEvents[dateStr].sort((a, b) => a.start - b.start).forEach(e => {
-                                if (limitPerson && e.person !== limitPerson) return;
-                                const startH = Math.floor(e.start / 60);
-                                const endH = Math.floor((e.end - 1) / 60);
-                                for (let h = startH; h <= endH; h++) {
-                                    if (!eventsByHour[h]) eventsByHour[h] = [];
-                                    eventsByHour[h].push(e);
-                                }
-                            });
-                        }
-
-                        for (let h = TG_START_HOUR; h <= TG_END_HOUR; h++) {
-                            const hourCell = document.createElement("div");
-                            hourCell.className = "tg-hour-cell";
-                            hourCell.style.height = hph + "px";
-
-                            if (eventsByHour[h]) {
-                                const seenPersons = new Set();
-                                eventsByHour[h].sort((a, b) => a.person.localeCompare(b.person)).forEach(e => {
-                                    if (seenPersons.has(e.person)) return;
-                                    seenPersons.add(e.person);
-
-                                    const bg = getStringColor(e.person);
-                                    // 個人視圖顯示全名，普通視圖顯示字首
-                                    const displayText = limitPerson ? e.person : e.person.charAt(0).toUpperCase();
-
-                                    const dot = document.createElement("div");
-                                    dot.className = "tg-person-dot";
-                                    dot.setAttribute('data-person', e.person);
-                                    dot.style.backgroundColor = bg;
-                                    dot.style.color = "black";
-                                    if (!isCurrentMonth) dot.style.opacity = "0.5";
-                                    dot.title = `${e.person} #${e.id + 1} | 🕒 ${formatTime(e.start)}-${formatTime(e.end)} | 🏢 ${e.client}`;
-                                    dot.textContent = displayText;
-                                    dot.onclick = (evt) => {
-                                        evt.stopPropagation();
-                                        toggleHighlight(e.person);
-                                    };
-                                    hourCell.appendChild(dot);
-                                });
-                            }
-                            dayCol.appendChild(hourCell);
-                        }
-                        daysContainer.appendChild(dayCol);
-                    });
-                    weekRow.appendChild(daysContainer);
-                    container.appendChild(weekRow);
-                });
-            });
-        }
-
-
-
-        async function downloadPDF(elementId, filename) {
-            const element = document.getElementById(elementId);
-
-            // 如果是個人工作表，執行「一週一頁」的特殊下載流程
-            if (elementId === 'personTimeGridResult') {
-                const weekRows = element.querySelectorAll('.tg-week-row');
-                if (weekRows.length === 0) return;
-
-                const pdf = new jspdf.jsPDF();
-                let firstPage = true;
-
-                for (let i = 0; i < weekRows.length; i++) {
-                    const weekRow = weekRows[i];
-
-                    // 建立臨時容器來組合該頁內容
-                    const container = document.createElement('div');
-                    container.style.padding = '30px';
-                    container.style.background = '#fff';
-                    container.style.width = element.offsetWidth + 'px';
-                    container.classList.add('is-personal'); // 繼承原本樣式
-
-                    // 尋找對應的月份標題
-                    let prev = weekRow.previousElementSibling;
-                    let monthTitle = null;
-                    while (prev) {
-                        if (!monthTitle && prev.classList.contains('calendar-month-title')) monthTitle = prev.cloneNode(true);
-                        if (monthTitle) break;
-                        prev = prev.previousElementSibling;
-                    }
-
-                    if (monthTitle) container.appendChild(monthTitle);
-                    container.appendChild(weekRow.cloneNode(true));
-
-                    // 必須暫時加入 DOM 才能擷取
-                    document.body.appendChild(container);
-                    const canvas = await html2canvas(container, {
-                        scale: 2,
-                        useCORS: true,
-                        logging: false
-                    });
-                    document.body.removeChild(container);
-
-                    const imgData = canvas.toDataURL('image/jpeg', 1.0);
-                    const w = canvas.width / 2;
-                    const h = canvas.height / 2;
-
-                    if (firstPage) {
-                        pdf.deletePage(1);
-                        pdf.addPage([w, h], w > h ? 'l' : 'p');
-                        firstPage = false;
-                    } else {
-                        pdf.addPage([w, h], w > h ? 'l' : 'p');
-                    }
-                    pdf.addImage(imgData, 'JPEG', 0, 0, w, h);
-                }
-
-                pdf.save(filename || '個人工作表.pdf');
-                return;
-            }
-
-            // 原本的單頁下載邏輯
-            const canvas = await html2canvas(element, {
-                scale: 2,
-                useCORS: true,
-                backgroundColor: "#ffffff",
-                logging: false,
-                scrollY: -window.scrollY
-            });
-
-            const imgData = canvas.toDataURL('image/jpeg', 1.0);
-            const width = canvas.width / 2; 
-            const height = canvas.height / 2;
-
-            const pdf = new jspdf.jsPDF({
-                orientation: width > height ? 'l' : 'p',
-                unit: 'px',
-                format: [width, height]
-            });
-
-            pdf.addImage(imgData, 'JPEG', 0, 0, width, height);
-            pdf.save(filename || '排班報告.pdf');
-        }
-
-        async function downloadAllPeoplePDF() {
-            const people = Object.keys(cachedAllEvents).sort();
-            if (people.length === 0) return;
-
-            // 顯示載入指示
-            const btn = document.querySelector('button[onclick="downloadAllPeoplePDF()"]');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = "⌛ 正在壓縮中...";
-            btn.disabled = true;
-
-            const zip = new JSZip();
-
-            // 建立背景容器
-            const offscreen = document.createElement('div');
-            offscreen.style.position = 'absolute';
-            offscreen.style.left = '-9999px';
-            offscreen.classList.add('is-personal');
-            document.body.appendChild(offscreen);
-
-            try {
-                for (const person of people) {
-                    const personPdf = new jspdf.jsPDF();
-                    let firstPageForPerson = true;
-
-                    offscreen.innerHTML = "";
-                    renderTimeGrid(offscreen, person);
-                    const weekRows = offscreen.querySelectorAll('.tg-week-row');
-                    
-                    for (let i = 0; i < weekRows.length; i++) {
-                        const weekRow = weekRows[i];
-                        const container = document.createElement('div');
-                        container.style.padding = '30px';
-                        container.style.background = '#fff';
-                        container.style.width = '1080px';
-                        container.classList.add('is-personal');
-
-                        let prev = weekRow.previousElementSibling;
-                        let monthTitle = null;
-                        while (prev) {
-                            if (!monthTitle && prev.classList.contains('calendar-month-title')) monthTitle = prev.cloneNode(true);
-                            if (monthTitle) break;
-                            prev = prev.previousElementSibling;
-                        }
-
-                        if (monthTitle) {
-                            const personTitle = document.createElement('div');
-                            personTitle.style = "font-size: 1.4rem; font-weight: 800; color: var(--primary); margin-bottom: 5px;";
-                            personTitle.textContent = `👤 ${person}`;
-                            container.appendChild(personTitle);
-                            container.appendChild(monthTitle);
-                        }
-                        container.appendChild(weekRow.cloneNode(true));
-
-                        document.body.appendChild(container);
-                        const canvas = await html2canvas(container, { scale: 2, useCORS: true, logging: false });
-                        document.body.removeChild(container);
-
-                        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-                        const w = canvas.width / 2;
-                        const h = canvas.height / 2;
-
-                        if (firstPageForPerson) {
-                            personPdf.deletePage(1);
-                            personPdf.addPage([w, h], w > h ? 'l' : 'p');
-                            firstPageForPerson = false;
-                        } else {
-                            personPdf.addPage([w, h], w > h ? 'l' : 'p');
-                        }
-                        personPdf.addImage(imgData, 'JPEG', 0, 0, w, h);
-                    }
-                    
-                    // 將單人的 PDF 產出 blob 並放入 ZIP
-                    const pdfBlob = personPdf.output('blob');
-                    zip.file(`排班表_${person}.pdf`, pdfBlob);
-                }
-
-                // 生成 ZIP 並下載
-                const zipBlob = await zip.generateAsync({ type: 'blob' });
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(zipBlob);
-                link.download = `全體人員分人排班表匯總_${new Date().toLocaleDateString().replace(/\//g,'-')}.zip`;
-                link.click();
-
-            } catch (err) {
-                console.error(err);
-                alert("ZIP 製作過程中發生錯誤");
-            } finally {
-                document.body.removeChild(offscreen);
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }
-        }
-    </script>
 </body>
-
 </html>
